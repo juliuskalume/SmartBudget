@@ -1,0 +1,6 @@
+{
+  "name": "SmartBudget",
+  "description": "AI-powered financial assistant for students featuring SMS-based transaction tracking and Smart Save+ value protection.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
