@@ -43,6 +43,13 @@ That creates the `user_app_state` table used to store:
 
 Supabase auth owns the user session. Browser local storage is only used for device-level UI state such as the active screen and Android SMS permission hint.
 
+In the Supabase dashboard, set Auth URL Configuration so email verification returns to your deployed site:
+
+- Site URL: `https://hamid-smart-budget.vercel.app`
+- Redirect URLs:
+  - `https://hamid-smart-budget.vercel.app/*`
+  - `http://localhost:3000/*`
+
 ## Vercel
 
 This repo is ready to host on Vercel.

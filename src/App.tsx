@@ -231,6 +231,7 @@ function App() {
 
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
+    const emailRedirectTo = getAuthRedirectUrl();
 
     if (!trimmedEmail || !trimmedEmail.includes("@") || !trimmedPassword) {
       flashMessage("warning", "Enter a valid email and password to continue.");
@@ -250,6 +251,7 @@ function App() {
           email: trimmedEmail,
           password: trimmedPassword,
           options: {
+            ...(emailRedirectTo ? { emailRedirectTo } : {}),
             data: {
               name: displayNameFromEmail(trimmedEmail),
             },
@@ -637,6 +639,14 @@ function displayNameFromEmail(email: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   return name || "SmartBudget User";
+}
+
+function getAuthRedirectUrl() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return `${window.location.origin}/`;
 }
 
 function sanitizeAdviceCard(card: unknown): AdviceCard | null {
