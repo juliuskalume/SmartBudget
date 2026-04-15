@@ -501,12 +501,17 @@ function App() {
   }
 
   if (isBootstrapping) {
-    return <LoadingScreen flash={flash} />;
+    return (
+      <div className="app-root app-root--scroll">
+        <LoadingScreen />
+        <Toast flash={flash} />
+      </div>
+    );
   }
 
   if (!session) {
     return (
-      <div className="app-root">
+      <div className="app-root app-root--scroll">
         <AuthScreen
           mode={authMode}
           email={email}
@@ -526,7 +531,7 @@ function App() {
 
   if (isAndroidNative && !deviceState.smsAccess) {
     return (
-      <div className="app-root">
+      <div className="app-root app-root--scroll">
         <PermissionScreen
           sampleSms={demoSmsSamples}
           onAllowSmsAccess={handleAllowSmsAccess}
@@ -540,7 +545,7 @@ function App() {
   }
 
   return (
-    <div className="app-root">
+    <div className="app-root app-root--shell">
       <AppShell
         session={session}
         activeScreen={deviceState.activeScreen}
@@ -577,27 +582,24 @@ function App() {
   );
 }
 
-function LoadingScreen({ flash }: { flash: Flash | null }) {
+function LoadingScreen() {
   return (
-    <div className="app-root">
-      <div className="auth-layout">
-        <Panel title="SmartBudget" subtitle="Syncing your cloud account" className="hero-panel auth-hero">
-          <div className="hero-badge">SmartBudget</div>
-          <h1>Loading your saved budget.</h1>
-          <p>Fetching your cloud account, then preparing the dashboard and native SMS flow.</p>
-          <div className="hero-preview">
-            <div className="hero-preview__card">
-              <span>Status</span>
-              <strong>Connecting</strong>
-            </div>
-            <div className="hero-preview__card hero-preview__card--accent">
-              <span>Storage</span>
-              <strong>Supabase</strong>
-            </div>
+    <div className="auth-layout loading-layout">
+      <Panel title="SmartBudget" subtitle="Syncing your cloud account" className="hero-panel auth-hero">
+        <div className="hero-badge">SmartBudget</div>
+        <h1>Loading your saved budget.</h1>
+        <p>Fetching your cloud account, then preparing the dashboard and native SMS flow.</p>
+        <div className="hero-preview">
+          <div className="hero-preview__card">
+            <span>Status</span>
+            <strong>Connecting</strong>
           </div>
-        </Panel>
-      </div>
-      <Toast flash={flash} />
+          <div className="hero-preview__card hero-preview__card--accent">
+            <span>Storage</span>
+            <strong>Supabase</strong>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 }

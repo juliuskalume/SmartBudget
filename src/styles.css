@@ -134,6 +134,16 @@ p {
   padding: 14px;
   display: grid;
   place-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.app-root--scroll {
+  place-items: start center;
+}
+
+.app-root--shell {
   overflow: hidden;
 }
 
@@ -1083,6 +1093,7 @@ select.input {
   color: var(--sb-primary);
   box-shadow: 0 22px 40px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(18px);
+  pointer-events: none;
 }
 
 .toast strong {
