@@ -7,19 +7,27 @@ import {
   BadgeDollarSign,
   BarChart3,
   BrainCircuit,
+  BusFront,
+  Clapperboard,
   CheckCircle2,
   CircleDollarSign,
   Filter,
+  GraduationCap,
+  HeartPulse,
+  House,
   Menu,
   PiggyBank,
   PieChart as PieChartIcon,
+  Receipt,
   ReceiptText,
   ScanText,
   Search,
   Send,
+  ShoppingBag,
   Target,
   Trash2,
   TrendingUp,
+  UtensilsCrossed,
   Wallet,
 } from "lucide-react";
 import { Bar, BarChart, Cell, CartesianGrid, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -31,6 +39,7 @@ import {
   formatDateLabel,
   formatMoney,
   formatPercent,
+  parseSmsTransaction,
   projectSavings,
   CATEGORY_COLORS,
 } from "../lib/finance";
@@ -39,29 +48,38 @@ import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./
 
 const chartTooltipStyle = {
   contentStyle: {
-    backgroundColor: "rgba(255,255,255,0.97)",
-    border: "1px solid rgba(15,109,243,0.08)",
-    borderRadius: 16,
-    boxShadow: "0 18px 34px rgba(15,23,42,0.12)",
-    color: "#000666",
+    backgroundColor: "rgba(11,16,28,0.96)",
+    border: "1px solid rgba(78,124,255,0.18)",
+    borderRadius: 18,
+    boxShadow: "0 20px 36px rgba(0,0,0,0.42)",
+    color: "#f8fbff",
   },
   labelStyle: {
-    color: "#475467",
+    color: "#9aa4c4",
     fontWeight: 700,
   },
   itemStyle: {
-    color: "#000666",
+    color: "#f8fbff",
   },
   cursor: {
-    fill: "rgba(15,109,243,0.06)",
+    fill: "rgba(78,124,255,0.08)",
   },
 };
 
 const chartAxisProps = {
   axisLine: false,
   tickLine: false,
-  tick: { fill: "#475467", fontSize: 11 },
+  tick: { fill: "#7f8bab", fontSize: 11 },
 };
+
+const categoryIconMap = {
+  Supermarket: UtensilsCrossed,
+  Transport: BusFront,
+  Entertainment: Clapperboard,
+  Bills: Receipt,
+  Education: GraduationCap,
+  Other: ShoppingBag,
+} as const;
 
 export function DashboardScreen({
   summary,
@@ -102,74 +120,86 @@ export function DashboardScreen({
 }) {
   const latestTransactions = recentTransactions.slice(0, 4);
   const hasTransactions = recentTransactions.length > 0;
+  const totalBalance = summary.savings;
+  const topCategories = categoryBreakdown.slice(0, 4);
 
   return (
-    <div className="screen-stack">
-      <section className="hero-strip panel">
-        <div className="hero-strip__copy">
-          <p className="eyebrow">Live dashboard</p>
-          <h2>{hasTransactions ? `Health score ${Math.round(summary.healthScore)} / 100` : "Your ledger is ready for the first import."}</h2>
-          <p>
-            {hasTransactions
-              ? "Track savings rate, expense pressure, and Smart Save+ progress before spending decisions drift off course."
-              : "Paste a real bank SMS or import messages from your phone to start the dashboard with live account data."}
-          </p>
-          <div className="button-row">
-            <button className="button button--primary" type="button" onClick={() => onSetScreen("save")}>
-              <CircleDollarSign size={16} />
-              Open Smart Save+
-            </button>
-            <button className="button button--secondary" type="button" onClick={() => onSetScreen("transactions")}>
-              <ReceiptText size={16} />
-              Review ledger
-            </button>
+    <div className="screen-stack screen-stack--dashboard">
+      <section className="balance-card">
+        <span className="balance-card__label">Total Balance</span>
+        <strong className="balance-card__amount">{formatMoney(totalBalance)}</strong>
+        <div className="balance-card__split">
+          <div className="balance-card__item">
+            <span>Income</span>
+            <strong>{formatMoney(summary.totalIncome)}</strong>
+          </div>
+          <div className="balance-card__item">
+            <span>Expenses</span>
+            <strong>{formatMoney(summary.totalExpenses)}</strong>
           </div>
         </div>
-
-        {hasTransactions ? (
-          <div className="hero-strip__dial">
-            <HealthDial score={summary.healthScore} />
-          </div>
-        ) : (
-          <div className="hero-strip__stack">
-            <div className="summary-chip">
-              <span>Status</span>
-              <strong>Awaiting first import</strong>
-            </div>
-            <div className="summary-chip summary-chip--accent">
-              <span>Ledger</span>
-              <strong>0 transactions</strong>
-            </div>
-          </div>
-        )}
       </section>
 
-      <section className="metric-grid">
-        <MetricCard icon={Wallet} label="Net income" value={formatMoney(summary.totalIncome)} hint="Cash entering the budget" tone="mint" />
-        <MetricCard
-          icon={ArrowDownRight}
-          label="Expenses"
-          value={formatMoney(summary.totalExpenses)}
-          hint={`${formatPercent(summary.expenseRatio)} of tracked income`}
-          tone="rose"
-        />
+      <section className="metric-grid metric-grid--dashboard">
+        <MetricCard icon={Wallet} label="Cash Flow" value={formatMoney(summary.cashFlow)} hint="Net movement this cycle" tone="sky" />
         <MetricCard
           icon={PiggyBank}
-          label="Savings rate"
+          label="Savings"
           value={formatPercent(summary.savingsRate)}
-          hint={`${formatMoney(safeSavings)} ready for Smart Save+`}
-          tone="amber"
+          hint={`${formatMoney(safeSavings)} ready to protect`}
+          tone="mint"
         />
-        <MetricCard icon={TrendingUp} label="Cash flow" value={formatMoney(summary.cashFlow)} hint="Income minus tracked spending" tone="sky" />
       </section>
 
-      <section className="dashboard-grid">
-        <Panel
-          title="Import SMS"
-          subtitle="Paste a bank alert and convert it into a transaction."
-        >
+      <Panel
+        title="Spending By Category"
+        subtitle={hasTransactions ? "Your current expense mix." : "Import transactions to populate this chart."}
+      >
+        {categoryBreakdown.length > 0 ? (
+          <div className="category-overview">
+            <ChartFrame height={220}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
+                  <Pie
+                    data={categoryBreakdown}
+                    dataKey="amount"
+                    nameKey="category"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={54}
+                    outerRadius={84}
+                    paddingAngle={3}
+                  >
+                    {categoryBreakdown.map((entry) => (
+                      <Cell key={entry.category} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartFrame>
+
+            <div className="category-legend">
+              {topCategories.map((entry) => (
+                <div className="category-legend__item" key={entry.category}>
+                  <div className="category-legend__meta">
+                    <span className="category-legend__dot" style={{ background: entry.color }} />
+                    <span>{entry.category}</span>
+                  </div>
+                  <strong>{formatMoney(entry.amount)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <EmptyState title="No spending yet" description="Import a few transactions to unlock the category breakdown." />
+        )}
+      </Panel>
+
+      <section className="dashboard-grid dashboard-grid--bottom">
+        <Panel title="Quick Import" subtitle="Turn a bank SMS into a transaction.">
           <div className="stack">
-            <div className="button-row">
+            <div className="button-row button-row--tight">
               {allowDemoTools ? (
                 <button className="button button--secondary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])} disabled={isImportingNativeSms}>
                   Sample SMS
@@ -178,155 +208,92 @@ export function DashboardScreen({
               {isAndroidNative ? (
                 <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
                   <ScanText size={16} />
-                  {isImportingNativeSms ? "Importing..." : "Import from phone"}
+                  {isImportingNativeSms ? "Importing..." : "Import phone SMS"}
                 </button>
               ) : null}
             </div>
             <textarea
-              className="textarea"
+              className="textarea textarea--compact"
               value={smsDraft}
               onChange={(event) => setSmsDraft(event.target.value)}
-              rows={5}
+              rows={4}
               placeholder="Paste a real bank SMS or card alert..."
             />
-            <div className="button-row">
+            <div className="button-row button-row--tight">
               <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
                 <Send size={16} />
                 {isAnalyzingSms ? "Analyzing..." : "Analyze SMS"}
               </button>
-              <p className="helper-copy">Auto-detects merchant, amount, category, and transaction type.</p>
+              <button className="button button--ghost" type="button" onClick={() => onSetScreen("transactions")}>
+                <ReceiptText size={16} />
+                Open Add Screen
+              </button>
             </div>
           </div>
         </Panel>
 
-        <Panel title="Financial health breakdown" subtitle="Category distribution from recent SMS imports.">
-          {categoryBreakdown.length > 0 ? (
-            <div className="category-bars">
-              {categoryBreakdown.map((entry) => (
-                <div className="category-bar" key={entry.category}>
-                  <div className="category-bar__meta">
-                    <span>{entry.category}</span>
-                    <strong>{formatPercent(entry.share)}</strong>
-                  </div>
-                  <div className="mini-progress mini-progress--colored">
-                    <span style={{ width: `${entry.share}%`, background: entry.color }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No spending yet" description="Import a few SMS messages to populate the pie chart." />
-          )}
-        </Panel>
-      </section>
-
-      <section className="chart-grid">
-        <Panel title="Spending mix" subtitle="Expense categories rendered as a donut chart.">
-          <ChartFrame height={300}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
-                <Pie
-                  data={categoryBreakdown}
-                  dataKey="amount"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={76}
-                  outerRadius={112}
-                  paddingAngle={2}
-                >
-                  {categoryBreakdown.map((entry) => (
-                    <Cell key={entry.category} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-
-        <Panel title="Monthly trend" subtitle="Income vs expenses over the last six months.">
-          <ChartFrame height={300}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={monthlyTrend}>
-                <CartesianGrid stroke="#e7edf4" vertical={false} />
-                <XAxis dataKey="label" stroke="#cbd5e1" {...chartAxisProps} />
-                <YAxis stroke="#cbd5e1" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
-                <Tooltip
-                  {...chartTooltipStyle}
-                  formatter={(value, name) => [
-                    formatMoney(Number(value)),
-                    name === "income" ? "Income" : name === "expenses" ? "Expenses" : "Balance",
-                  ]}
-                />
-                <Line type="monotone" dataKey="income" stroke="#54f1a3" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="expenses" stroke="#f0c36e" strokeWidth={3} dot={false} />
-                <Line type="monotone" dataKey="balance" stroke="#7dd3fc" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-      </section>
-
-      <section className="dashboard-grid dashboard-grid--bottom">
-        <Panel title="Insights" subtitle="What the model is seeing right now.">
-          {hasTransactions ? (
-            <div className="insight-list">
-              {insights.map((insight) => (
-                <div className="insight-row" key={insight}>
-                  <CheckCircle2 size={16} />
-                  <p>{insight}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No insights yet" description="Import a few real transactions and SmartBudget will start surfacing patterns here." />
-          )}
-        </Panel>
-
         <Panel
-          title="Recent imports"
-          subtitle="The latest SMS-driven transactions."
+          title="Recent Transactions"
+          subtitle={hasTransactions ? "Your latest ledger activity." : "Nothing has been added yet."}
           action={
             <button className="button button--ghost" type="button" onClick={() => onSetScreen("transactions")}>
-              Open ledger
+              See all
             </button>
           }
         >
           {latestTransactions.length > 0 ? (
             <div className="transaction-snippets">
-              {latestTransactions.map((transaction) => (
-                <div className="transaction-snippet" key={transaction.id}>
-                  <div>
-                    <strong>{transaction.merchant}</strong>
-                    <span>
-                      {formatDateLabel(transaction.date)} - {transaction.category} - {transaction.source.toUpperCase()}
-                    </span>
+              {latestTransactions.map((transaction) => {
+                const Icon = categoryIconMap[transaction.category] ?? ShoppingBag;
+
+                return (
+                  <div className="transaction-snippet" key={transaction.id}>
+                    <div className="transaction-snippet__icon" style={{ color: CATEGORY_COLORS[transaction.category] }}>
+                      <Icon size={16} />
+                    </div>
+                    <div>
+                      <strong>{transaction.merchant}</strong>
+                      <span>
+                        {formatDateLabel(transaction.date)} - {transaction.category}
+                      </span>
+                    </div>
+                    <strong className={transaction.kind === "income" ? "positive" : "negative"}>
+                      {transaction.kind === "income" ? "+" : "-"}
+                      {formatMoney(transaction.amount, transaction.currency)}
+                    </strong>
                   </div>
-                  <strong className={transaction.kind === "income" ? "positive" : "negative"}>
-                    {transaction.kind === "income" ? "+" : "-"}
-                    {formatMoney(transaction.amount, transaction.currency)}
-                  </strong>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
-            <EmptyState title="No imports yet" description="Your ledger stays empty until you save a real SMS transaction." />
+            <EmptyState title="No transactions yet" description="Your first SMS import will appear here." />
           )}
         </Panel>
       </section>
 
-      <section className="goal-strip panel">
-        <div>
-          <p className="eyebrow">Smart Save+</p>
-          <h3>{formatPercent(goalProgress)} of your saving goal is ready.</h3>
-          <p>Move part of the surplus into stable currencies to preserve value over time.</p>
-        </div>
-        <button className="button button--primary" type="button" onClick={() => onSetScreen("save")}>
-          <BadgeDollarSign size={16} />
-          Convert savings
-        </button>
-      </section>
+      <Panel title="Budget Signal" subtitle="What needs attention right now.">
+        {hasTransactions ? (
+          <div className="insight-list">
+            {insights.slice(0, 2).map((insight) => (
+              <div className="insight-row" key={insight}>
+                <CheckCircle2 size={16} />
+                <p>{insight}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="hero-strip__stack">
+            <div className="summary-chip">
+              <span>Health Score</span>
+              <strong>{Math.round(summary.healthScore)} / 100</strong>
+            </div>
+            <div className="summary-chip summary-chip--accent">
+              <span>Save Goal</span>
+              <strong>{formatPercent(goalProgress)} ready</strong>
+            </div>
+          </div>
+        )}
+      </Panel>
     </div>
   );
 }
@@ -334,19 +301,45 @@ export function DashboardScreen({
 export function TransactionsScreen({
   transactions,
   allowDemoTools,
+  smsDraft,
+  setSmsDraft,
+  isAnalyzingSms,
+  isAndroidNative,
+  isImportingNativeSms,
   onDeleteTransaction,
   onFillSampleSms,
+  onAnalyzeSms,
+  onImportNativeSms,
   onSetScreen,
 }: {
   transactions: Transaction[];
   allowDemoTools: boolean;
+  smsDraft: string;
+  setSmsDraft: (value: string) => void;
+  isAnalyzingSms: boolean;
+  isAndroidNative: boolean;
+  isImportingNativeSms: boolean;
   onDeleteTransaction: (id: string) => void;
   onFillSampleSms: (value: string) => void;
+  onAnalyzeSms: () => void;
+  onImportNativeSms: () => void;
   onSetScreen: (screen: ScreenKey) => void;
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
+  const parsedDraft = smsDraft.trim() ? parseSmsTransaction(smsDraft) : null;
+  const activeKind = parsedDraft?.kind === "income" ? "income" : "expense";
+  const categoryTiles = [
+    { label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
+    { label: "Transport", category: "Transport" as const, icon: BusFront },
+    { label: "Shopping", category: "Other" as const, icon: ShoppingBag },
+    { label: "Bills", category: "Bills" as const, icon: Receipt },
+    { label: "Entertainment", category: "Entertainment" as const, icon: Clapperboard },
+    { label: "Health", category: "Other" as const, icon: HeartPulse },
+    { label: "Home", category: "Bills" as const, icon: House },
+    { label: "Education", category: "Education" as const, icon: GraduationCap },
+  ];
 
   const filtered = transactions.filter((transaction) => {
     const matchesQuery =
@@ -359,12 +352,84 @@ export function TransactionsScreen({
 
   return (
     <div className="screen-stack">
+      <Panel title="Transaction Composer" subtitle="Analyze an SMS, preview the category, then add it to the ledger." className="composer-panel">
+        <div className="segment-switch">
+          <button className={`segment-switch__button ${activeKind === "expense" ? "segment-switch__button--active" : ""}`} type="button">
+            Expense
+          </button>
+          <button className={`segment-switch__button ${activeKind === "income" ? "segment-switch__button--active" : ""}`} type="button">
+            Income
+          </button>
+        </div>
+
+        <div className="amount-panel">
+          <span>Amount</span>
+          <strong>{parsedDraft ? formatMoney(parsedDraft.amount, parsedDraft.currency) : formatMoney(0)}</strong>
+        </div>
+
+        <div className="category-tile-grid">
+          {categoryTiles.map((tile) => {
+            const Icon = tile.icon;
+            const active = parsedDraft?.category === tile.category;
+
+            return (
+              <div className={`category-tile ${active ? "category-tile--active" : ""}`} key={`${tile.label}-${tile.category}`}>
+                <div className="category-tile__icon">
+                  <Icon size={18} />
+                </div>
+                <span>{tile.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        <label className="field">
+          <span>Description</span>
+          <textarea
+            className="textarea textarea--compact"
+            value={smsDraft}
+            onChange={(event) => setSmsDraft(event.target.value)}
+            rows={4}
+            placeholder="Paste your bank SMS here..."
+          />
+        </label>
+
+        <div className="composer-meta">
+          <div className="composer-meta__field">
+            <span>Date</span>
+            <strong>{new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</strong>
+          </div>
+          <div className="composer-meta__field">
+            <span>Payment Method</span>
+            <strong>{parsedDraft ? (parsedDraft.kind === "income" ? "Transfer" : "Card / SMS") : "Pending"}</strong>
+          </div>
+        </div>
+
+        <div className="button-row button-row--tight">
+          <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
+            <Send size={16} />
+            {isAnalyzingSms ? "Analyzing..." : "Add Transaction"}
+          </button>
+          {isAndroidNative ? (
+            <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
+              <ScanText size={16} />
+              {isImportingNativeSms ? "Importing..." : "Phone SMS"}
+            </button>
+          ) : null}
+          {allowDemoTools ? (
+            <button className="button button--ghost" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])}>
+              Sample SMS
+            </button>
+          ) : null}
+        </div>
+      </Panel>
+
       <Panel
-        title="Transaction list"
+        title="Transaction List"
         subtitle={`${filtered.length} visible / ${transactions.length} total entries`}
         action={
           <button className="button button--secondary" type="button" onClick={() => onSetScreen("dashboard")}>
-            Back to dashboard
+            Back Home
           </button>
         }
       >
@@ -481,99 +546,118 @@ export function TransactionsScreen({
 export function AnalysisScreen({
   summary,
   categoryBreakdown,
+  monthlyTrend,
+  yearlyTrend,
   weeklyTrend,
   insights,
 }: {
   summary: FinancialSummary;
   categoryBreakdown: ReturnType<typeof buildCategoryBreakdown>;
+  monthlyTrend: ReturnType<typeof buildMonthlyTrend>;
+  yearlyTrend: ReturnType<typeof buildMonthlyTrend>;
   weeklyTrend: Array<{ label: string; value: number }>;
   insights: string[];
 }) {
-  const highestCategory = categoryBreakdown[0];
+  const [range, setRange] = useState<"week" | "month" | "year" | "custom">("week");
+  const monthlyExpenseTrend = monthlyTrend.map((entry) => ({ label: entry.label, value: entry.expenses }));
+  const yearlyExpenseTrend = yearlyTrend.map((entry) => ({ label: entry.label, value: entry.expenses }));
+  const customTrend = yearlyTrend.slice(-6).map((entry) => ({ label: entry.label, value: Math.max(entry.balance, 0) }));
+  const chartData =
+    range === "week" ? weeklyTrend : range === "month" ? monthlyExpenseTrend : range === "year" ? yearlyExpenseTrend : customTrend;
+  const previousPoint = chartData[chartData.length - 2]?.value ?? 0;
+  const latestPoint = chartData[chartData.length - 1]?.value ?? 0;
+  const trendDelta = previousPoint > 0 ? ((latestPoint - previousPoint) / previousPoint) * 100 : 0;
 
   return (
     <div className="screen-stack">
-      <section className="metric-grid">
-        <MetricCard
-          icon={PieChartIcon}
-          label="Largest category"
-          value={highestCategory ? highestCategory.category : "None"}
-          hint={highestCategory ? `${formatPercent(highestCategory.share)} of expenses` : "Import SMS to reveal spend mix"}
-          tone="sky"
-        />
-        <MetricCard icon={BarChart3} label="Debt pressure" value={formatPercent(summary.debtLevel)} hint="Bills and obligations tracked from SMS" tone="rose" />
-        <MetricCard icon={TrendingUp} label="Cash flow" value={formatMoney(summary.cashFlow)} hint="Net balance after tracked spending" tone="mint" />
-        <MetricCard icon={AlertTriangle} label="Expense ratio" value={formatPercent(summary.expenseRatio)} hint="Share of income currently consumed" tone="amber" />
-      </section>
+      <Panel title="Statistics" subtitle="Track spending trends across your most recent activity." className="stats-panel">
+        <div className="segment-switch segment-switch--wide">
+          {[
+            { key: "week", label: "Week" },
+            { key: "month", label: "Month" },
+            { key: "year", label: "Year" },
+            { key: "custom", label: "Custom" },
+          ].map((option) => (
+            <button
+              className={`segment-switch__button ${range === option.key ? "segment-switch__button--active" : ""}`}
+              key={option.key}
+              type="button"
+              onClick={() => setRange(option.key as typeof range)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
-      <section className="chart-grid">
-        <Panel title="Spending breakdown" subtitle="Expense categories rendered as a donut chart.">
-          <ChartFrame height={320}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
-                <Pie
-                  data={categoryBreakdown}
-                  dataKey="amount"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={74}
-                  outerRadius={118}
-                  paddingAngle={2}
-                >
-                  {categoryBreakdown.map((entry) => (
-                    <Cell key={entry.category} fill={entry.color} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-
-        <Panel title="Weekly spending" subtitle="Bar chart of the last eight weeks of outflow.">
-          <ChartFrame height={320}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={weeklyTrend}>
-                <CartesianGrid stroke="#e7edf4" vertical={false} />
-                <XAxis dataKey="label" stroke="#cbd5e1" {...chartAxisProps} />
-                <YAxis stroke="#cbd5e1" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
-                <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value)), "Weekly spend"]} />
-                <Bar dataKey="value" radius={[12, 12, 0, 0]} fill="#7dd3fc" />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-      </section>
-
-      <section className="dashboard-grid dashboard-grid--bottom">
-        <Panel title="Insights that matter" subtitle="The current data points most likely to change behavior.">
-          <div className="insight-list">
-            {insights.map((insight) => (
-              <div className="insight-row" key={insight}>
-                <AlertTriangle size={16} />
-                <p>{insight}</p>
-              </div>
-            ))}
+        <div className="stats-headline">
+          <div>
+            <strong>Spending Trends</strong>
+            <span>{range === "week" ? "Recent weekly outflow" : range === "month" ? "Monthly expenses" : "Long-range expense pattern"}</span>
           </div>
-        </Panel>
+          <b className={trendDelta > 0 ? "negative" : "positive"}>
+            {previousPoint > 0 ? `${trendDelta > 0 ? "+" : "-"}${Math.abs(trendDelta).toFixed(0)}%` : "0%"}
+          </b>
+        </div>
 
-        <Panel title="Category pressure" subtitle="Share of expense weight by group.">
-          <div className="category-bars">
-            {categoryBreakdown.map((entry) => (
-              <div className="category-bar" key={entry.category}>
-                <div className="category-bar__meta">
-                  <span>{entry.category}</span>
-                  <strong>{formatMoney(entry.amount)}</strong>
+        <ChartFrame height={260}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <CartesianGrid stroke="rgba(127,139,171,0.12)" vertical={false} />
+              <XAxis dataKey="label" {...chartAxisProps} />
+              <YAxis {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
+              <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value)), "Spend"]} />
+              <Bar dataKey="value" radius={[10, 10, 0, 0]}>
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`${entry.label}-${index}`}
+                    fill={index % 4 === 2 ? "#9dc7ff" : index % 3 === 0 ? "#70abff" : "#4d84ff"}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </ChartFrame>
+
+        <div className="stats-note">
+          <span className="stats-note__dot" />
+          <p>{insights[1] ?? "Import more transactions to sharpen the comparison."}</p>
+        </div>
+      </Panel>
+
+      <Panel title="Category Breakdown" subtitle="The categories currently carrying most of the spend.">
+        {categoryBreakdown.length > 0 ? (
+          <div className="category-breakdown-list">
+            {categoryBreakdown.map((entry) => {
+              const Icon = categoryIconMap[entry.category] ?? ShoppingBag;
+
+              return (
+                <div className="breakdown-row" key={entry.category}>
+                  <div className="breakdown-row__icon" style={{ color: entry.color }}>
+                    <Icon size={18} />
+                  </div>
+                  <div className="breakdown-row__body">
+                    <div className="breakdown-row__meta">
+                      <div>
+                        <strong>{entry.category}</strong>
+                        <span>{formatPercent(entry.share)} of total</span>
+                      </div>
+                      <div className="breakdown-row__amount">
+                        <strong>{formatMoney(entry.amount)}</strong>
+                        <span className={entry.share > 30 ? "negative" : "positive"}>{entry.share > 30 ? "High" : "Stable"}</span>
+                      </div>
+                    </div>
+                    <div className="mini-progress mini-progress--colored">
+                      <span style={{ width: `${entry.share}%`, background: entry.color }} />
+                    </div>
+                  </div>
                 </div>
-                <div className="mini-progress mini-progress--colored">
-                  <span style={{ width: `${entry.share}%`, background: entry.color }} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
-        </Panel>
-      </section>
+        ) : (
+          <EmptyState title="No breakdown yet" description="Once expenses are imported, category pressure appears here." />
+        )}
+      </Panel>
     </div>
   );
 }

@@ -67,7 +67,7 @@ export function Panel({
     <section className={`panel ${className}`.trim()}>
       <div className="panel__header">
         <div>
-          <p className="eyebrow">{title}</p>
+          <h3 className="panel__title">{title}</h3>
           {subtitle ? <p className="panel__subtitle">{subtitle}</p> : null}
         </div>
         {action ? <div className="panel__action">{action}</div> : null}

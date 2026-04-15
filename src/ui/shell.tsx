@@ -9,7 +9,7 @@ import {
   Wallet,
 } from "lucide-react";
 import type { AdviceCard, CurrencyCode, FinancialSummary, ScreenKey, Transaction } from "../types";
-import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, formatMoney, formatPercent, projectSavings } from "../lib/finance";
+import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, projectSavings } from "../lib/finance";
 import { AdviceScreen, AnalysisScreen, DashboardScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
 
 export function AppShell({
@@ -77,12 +77,15 @@ export function AppShell({
 }) {
   const categoryBreakdown = buildCategoryBreakdown(transactions);
   const monthlyTrend = buildMonthlyTrend(transactions, 6);
+  const yearlyTrend = buildMonthlyTrend(transactions, 12);
   const weeklyTrend = buildWeeklyTrend(transactions, 8);
+  const headerMeta = getHeaderMeta(activeScreen);
   const screen = renderScreen({
     activeScreen,
     summary,
     categoryBreakdown,
     monthlyTrend,
+    yearlyTrend,
     weeklyTrend,
     transactions,
     allowDemoTools,
@@ -116,13 +119,13 @@ export function AppShell({
   return (
     <div className="phone-shell">
       <header className="phone-header">
-        <div className="phone-brand">
-          <div className="phone-brand__mark">
-            <Wallet className="w-5 h-5" />
+        <div className="phone-brand phone-brand--screen">
+          <div className="phone-brand__mark phone-brand__mark--ghost">
+            <Wallet size={18} />
           </div>
           <div className="phone-brand__text">
-            <strong>SmartBudget</strong>
-            <span>Manage Smart. Save Smarter.</span>
+            <strong>{headerMeta.title}</strong>
+            <span>{headerMeta.subtitle}</span>
           </div>
         </div>
 
@@ -147,16 +150,10 @@ export function AppShell({
 
       <nav className="phone-nav" aria-label="Primary navigation">
         <NavItem label="Home" icon={Home} active={activeScreen === "dashboard"} onClick={() => onSelectScreen("dashboard")} />
-        <NavItem label="History" icon={ReceiptText} active={activeScreen === "transactions"} onClick={() => onSelectScreen("transactions")} />
-        <NavItem
-          label="Analysis"
-          icon={TrendingUp}
-          active={activeScreen === "analysis"}
-          center
-          onClick={() => onSelectScreen("analysis")}
-        />
-        <NavItem label="Save+" icon={PiggyBank} active={activeScreen === "save"} onClick={() => onSelectScreen("save")} />
-        <NavItem label="Advice" icon={Lightbulb} active={activeScreen === "advice"} onClick={() => onSelectScreen("advice")} />
+        <NavItem label="Add" icon={ReceiptText} active={activeScreen === "transactions"} onClick={() => onSelectScreen("transactions")} />
+        <NavItem label="Stats" icon={TrendingUp} active={activeScreen === "analysis"} onClick={() => onSelectScreen("analysis")} />
+        <NavItem label="Save" icon={PiggyBank} active={activeScreen === "save"} onClick={() => onSelectScreen("save")} />
+        <NavItem label="AI" icon={Lightbulb} active={activeScreen === "advice"} onClick={() => onSelectScreen("advice")} />
       </nav>
     </div>
   );
@@ -166,19 +163,17 @@ function NavItem({
   label,
   icon: Icon,
   active,
-  center,
   onClick,
 }: {
   label: string;
   icon: ComponentType<{ className?: string; size?: number }>;
   active: boolean;
-  center?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      className={`phone-nav__item ${active ? "phone-nav__item--active" : ""} ${center ? "phone-nav__item--center" : ""}`}
+      className={`phone-nav__item ${active ? "phone-nav__item--active" : ""}`}
       onClick={onClick}
     >
       <Icon size={20} className="phone-nav__icon" />
@@ -192,6 +187,7 @@ function renderScreen({
   summary,
   categoryBreakdown,
   monthlyTrend,
+  yearlyTrend,
   weeklyTrend,
   transactions,
   allowDemoTools,
@@ -223,6 +219,7 @@ function renderScreen({
   summary: FinancialSummary;
   categoryBreakdown: ReturnType<typeof buildCategoryBreakdown>;
   monthlyTrend: ReturnType<typeof buildMonthlyTrend>;
+  yearlyTrend: ReturnType<typeof buildMonthlyTrend>;
   weeklyTrend: ReturnType<typeof buildWeeklyTrend>;
   transactions: Transaction[];
   allowDemoTools: boolean;
@@ -278,13 +275,29 @@ function renderScreen({
         <TransactionsScreen
           transactions={transactions}
           allowDemoTools={allowDemoTools}
+          smsDraft={smsDraft}
+          setSmsDraft={setSmsDraft}
+          isAnalyzingSms={isAnalyzingSms}
+          isAndroidNative={isAndroidNative}
+          isImportingNativeSms={isImportingNativeSms}
           onDeleteTransaction={onDeleteTransaction}
           onFillSampleSms={onFillSampleSms}
+          onAnalyzeSms={onAnalyzeSms}
+          onImportNativeSms={onImportNativeSms}
           onSetScreen={onSelectScreen}
         />
       );
     case "analysis":
-      return <AnalysisScreen summary={summary} categoryBreakdown={categoryBreakdown} weeklyTrend={weeklyTrend} insights={insights} />;
+      return (
+        <AnalysisScreen
+          summary={summary}
+          categoryBreakdown={categoryBreakdown}
+          monthlyTrend={monthlyTrend}
+          yearlyTrend={yearlyTrend}
+          weeklyTrend={weeklyTrend}
+          insights={insights}
+        />
+      );
     case "save":
       return (
         <SmartSaveScreen
@@ -312,5 +325,42 @@ function renderScreen({
       );
     default:
       return null;
+  }
+}
+
+function getHeaderMeta(activeScreen: ScreenKey) {
+  const currentMonth = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  switch (activeScreen) {
+    case "dashboard":
+      return {
+        title: "Dashboard",
+        subtitle: currentMonth,
+      };
+    case "transactions":
+      return {
+        title: "Add Transaction",
+        subtitle: "Import from SMS and review the ledger",
+      };
+    case "analysis":
+      return {
+        title: "Statistics",
+        subtitle: "Live spending trends and category pressure",
+      };
+    case "save":
+      return {
+        title: "Budget Safe",
+        subtitle: "Protect savings with Smart Save+",
+      };
+    case "advice":
+      return {
+        title: "AI Coach",
+        subtitle: "Actionable recommendations for your next move",
+      };
+    default:
+      return {
+        title: "SmartBudget",
+        subtitle: currentMonth,
+      };
   }
 }
