@@ -19,6 +19,7 @@ export function AuthScreen({
   onSubmit,
   onTryDemo,
   cloudReady,
+  authRedirectUrl,
   isAuthenticating,
 }: {
   mode: "login" | "signup";
@@ -30,8 +31,11 @@ export function AuthScreen({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onTryDemo: () => void;
   cloudReady: boolean;
+  authRedirectUrl?: string;
   isAuthenticating: boolean;
 }) {
+  const redirectHost = getRedirectHost(authRedirectUrl);
+
   return (
     <div className="auth-layout">
       <Panel title="SmartBudget" subtitle="Cloud-synced student finance assistant" className="hero-panel auth-hero">
@@ -137,6 +141,16 @@ export function AuthScreen({
             ? "Your account and transactions sync to Supabase after login. Android SMS import stays local until the parsed transaction is saved."
             : "Configure Supabase to enable real login and cloud sync. Demo mode still works for previews."}
         </div>
+
+        {mode === "signup" && cloudReady ? (
+          <div className="auth-note auth-note--signup">
+            <ShieldCheck size={16} />
+            <span>
+              After you sign up, check your email for the confirmation link and open it from{" "}
+              <strong>{redirectHost ?? "the same SmartBudget site"}</strong> to return to SmartBudget.
+            </span>
+          </div>
+        ) : null}
       </Panel>
     </div>
   );
@@ -204,4 +218,16 @@ export function PermissionScreen({
       </Panel>
     </div>
   );
+}
+
+function getRedirectHost(authRedirectUrl?: string) {
+  if (!authRedirectUrl) {
+    return null;
+  }
+
+  try {
+    return new URL(authRedirectUrl).host;
+  } catch {
+    return authRedirectUrl.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  }
 }

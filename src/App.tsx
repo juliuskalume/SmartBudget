@@ -512,6 +512,8 @@ function App() {
   }
 
   if (!session) {
+    const authRedirectUrl = getAuthRedirectUrl();
+
     return (
       <div className="app-root app-root--scroll">
         <AuthScreen
@@ -524,6 +526,7 @@ function App() {
           onSubmit={handleAuthSubmit}
           onTryDemo={loadDemoData}
           cloudReady={isSupabaseConfigured}
+          authRedirectUrl={authRedirectUrl}
           isAuthenticating={isAuthenticating}
         />
         <Toast flash={flash} />
