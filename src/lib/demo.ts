@@ -1,0 +1,141 @@
+import type { CurrencyCode, Transaction } from "../types";
+
+function daysAgo(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toISOString();
+}
+
+export const demoSmsSamples = [
+  "Your card was charged 150 TL at Migros.",
+  "Garanti account was credited with 1,500 TL.",
+  "Netflix payment of 120 TL completed.",
+];
+
+export const demoTransactions: Transaction[] = [
+  {
+    id: "manual-1",
+    date: daysAgo(1),
+    merchant: "Migros",
+    amount: 150,
+    currency: "TRY",
+    category: "Supermarket",
+    kind: "expense",
+    source: "manual",
+    rawSms: demoSmsSamples[0],
+  },
+  {
+    id: "manual-2",
+    date: daysAgo(2),
+    merchant: "Uber",
+    amount: 60,
+    currency: "TRY",
+    category: "Transport",
+    kind: "expense",
+    source: "manual",
+    rawSms: "Your account was charged 60 TL at Uber.",
+  },
+  {
+    id: "manual-3",
+    date: daysAgo(3),
+    merchant: "Netflix",
+    amount: 120,
+    currency: "TRY",
+    category: "Entertainment",
+    kind: "expense",
+    source: "manual",
+    rawSms: demoSmsSamples[2],
+  },
+  {
+    id: "manual-4",
+    date: daysAgo(5),
+    merchant: "Student Scholarship",
+    amount: 1500,
+    currency: "TRY",
+    category: "Education",
+    kind: "income",
+    source: "manual",
+  },
+  {
+    id: "manual-5",
+    date: daysAgo(8),
+    merchant: "Family Transfer",
+    amount: 1000,
+    currency: "TRY",
+    category: "Other",
+    kind: "income",
+    source: "manual",
+  },
+  {
+    id: "manual-6",
+    date: daysAgo(9),
+    merchant: "Electricity Bill",
+    amount: 180,
+    currency: "TRY",
+    category: "Bills",
+    kind: "expense",
+    source: "manual",
+  },
+  {
+    id: "manual-7",
+    date: daysAgo(11),
+    merchant: "Campus Bookstore",
+    amount: 90,
+    currency: "TRY",
+    category: "Education",
+    kind: "expense",
+    source: "manual",
+  },
+  {
+    id: "manual-8",
+    date: daysAgo(15),
+    merchant: "Credit Card Payment",
+    amount: 300,
+    currency: "TRY",
+    category: "Bills",
+    kind: "expense",
+    source: "manual",
+  },
+  {
+    id: "manual-9",
+    date: daysAgo(18),
+    merchant: "Cinema City",
+    amount: 75,
+    currency: "TRY",
+    category: "Entertainment",
+    kind: "expense",
+    source: "manual",
+  },
+  {
+    id: "manual-10",
+    date: daysAgo(21),
+    merchant: "Bus Pass",
+    amount: 40,
+    currency: "TRY",
+    category: "Transport",
+    kind: "expense",
+    source: "manual",
+  },
+  {
+    id: "manual-11",
+    date: daysAgo(24),
+    merchant: "Cafe Nero",
+    amount: 65,
+    currency: "TRY",
+    category: "Entertainment",
+    kind: "expense",
+    source: "manual",
+  },
+  {
+    id: "manual-12",
+    date: daysAgo(30),
+    merchant: "Part-Time Job",
+    amount: 1200,
+    currency: "TRY",
+    category: "Other",
+    kind: "income",
+    source: "manual",
+  },
+];
+
+export const targetCurrencies: CurrencyCode[] = ["USD", "EUR"];
