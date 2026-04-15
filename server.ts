@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
@@ -7,11 +8,12 @@ import Groq from "groq-sdk";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const groqApiKey = process.env.GROQ_API_KEY?.trim();
+const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT ?? 3000);
 
   app.use(express.json());
 
@@ -23,7 +25,7 @@ async function startServer() {
   // Groq AI Categorization
   app.post("/api/ai/categorize", async (req, res) => {
     const { smsText } = req.body;
-    if (!process.env.GROQ_API_KEY) {
+    if (!groq) {
       return res.json({ merchant: "Unknown", amount: 0, category: "Other" });
     }
 
@@ -54,7 +56,7 @@ async function startServer() {
   // Groq AI Financial Advice
   app.post("/api/ai/advice", async (req, res) => {
     const { data } = req.body;
-    if (!process.env.GROQ_API_KEY) {
+    if (!groq) {
       return res.json([]);
     }
 
