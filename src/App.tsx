@@ -1,16 +1,41 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { demoSmsSamples, demoTransactions } from "./lib/demo";
 import { importAndroidSmsMessages, isAndroidNativePlatform, type AndroidSmsInboxMessage } from "./lib/android-sms";
-import { buildAdvice, buildCategoryBreakdown, buildInsights, buildMonthlyTrend, buildWeeklyTrend, computeSummary, convertCurrency, formatMoney, normalizeAdviceType, normalizeCategory, parseSmsTransaction, projectSavings } from "./lib/finance";
+import {
+  DEFAULT_SMART_SAVE_GOAL,
+  createDefaultCloudState,
+  loadDeviceState,
+  saveDeviceState,
+  type CloudState,
+  type DeviceState,
+} from "./lib/app-state";
+import { loadCloudState, saveCloudState } from "./lib/cloud-store";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
+import {
+  buildAdvice,
+  buildCategoryBreakdown,
+  buildInsights,
+  buildMonthlyTrend,
+  buildWeeklyTrend,
+  computeSummary,
+  convertCurrency,
+  formatMoney,
+  normalizeAdviceType,
+  normalizeCategory,
+  parseSmsTransaction,
+  projectSavings,
+} from "./lib/finance";
 import type { AdviceCard, CurrencyCode, ScreenKey, Transaction } from "./types";
 import { AppShell } from "./ui/shell";
 import { AuthScreen, PermissionScreen } from "./ui/auth";
-import { Toast } from "./ui/shared";
+import { Panel, Toast } from "./ui/shared";
 
 type Session = {
+  userId: string;
   email: string;
   name: string;
-  mode: "demo" | "local";
+  mode: "cloud" | "demo";
 };
 
 type Flash = {
@@ -18,38 +43,140 @@ type Flash = {
   message: string;
 };
 
-type PersistedState = {
-  session: Session | null;
-  smsAccess: boolean;
-  activeScreen: ScreenKey;
-  transactions: Transaction[];
-  smartSaveGoal: number;
-  targetCurrency: CurrencyCode;
-};
-
-const STORAGE_KEY = "smartbudget-product-state-v1";
-const DEFAULT_GOAL = 500;
-
 function App() {
-  const [state, setState] = useState<PersistedState>(() => loadInitialState());
+  const [deviceState, setDeviceState] = useState<DeviceState>(() => loadDeviceState());
+  const [cloudState, setCloudState] = useState<CloudState>(() => createDefaultCloudState());
+  const [session, setSession] = useState<Session | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("student@smartbudget.app");
   const [password, setPassword] = useState("");
   const [smsDraft, setSmsDraft] = useState(demoSmsSamples[0]);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [aiAdvice, setAiAdvice] = useState<AdviceCard[] | null>(null);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isAnalyzingSms, setIsAnalyzingSms] = useState(false);
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(Boolean(isSupabaseConfigured));
   const isAndroidNative = isAndroidNativePlatform();
+  const appliedCloudUserIdRef = useRef<string | null>(null);
+  const isHydratingCloudRef = useRef(false);
+  const skipNextCloudSaveRef = useRef(false);
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      // Ignore storage failures and keep the session functional.
+    saveDeviceState(deviceState);
+  }, [deviceState]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setIsBootstrapping(false);
+      return;
     }
-  }, [state]);
+
+    let cancelled = false;
+
+    const hydrateFromSession = async (nextSession: SupabaseSession | null) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (!nextSession?.user?.id) {
+        appliedCloudUserIdRef.current = null;
+        isHydratingCloudRef.current = false;
+        skipNextCloudSaveRef.current = true;
+        setSession(null);
+        setCloudState(createDefaultCloudState());
+        setAiAdvice(null);
+        setPassword("");
+        setIsBootstrapping(false);
+        return;
+      }
+
+      const nextAccount = buildSessionFromSupabase(nextSession);
+      isHydratingCloudRef.current = true;
+      skipNextCloudSaveRef.current = true;
+      setSession(nextAccount);
+
+      if (appliedCloudUserIdRef.current === nextSession.user.id) {
+        setIsBootstrapping(false);
+        return;
+      }
+
+      appliedCloudUserIdRef.current = nextSession.user.id;
+      setIsBootstrapping(true);
+      setCloudState(createDefaultCloudState());
+
+      try {
+        const loaded = await loadCloudState(nextSession.user.id);
+        const hydrated = loaded ?? createDefaultCloudState();
+
+        if (!loaded) {
+          await saveCloudState(nextSession.user.id, hydrated);
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        skipNextCloudSaveRef.current = true;
+        setCloudState(hydrated);
+        setAiAdvice(null);
+      } catch (error) {
+        if (!cancelled) {
+          skipNextCloudSaveRef.current = true;
+          setCloudState(createDefaultCloudState());
+          flashMessage("error", error instanceof Error ? error.message : "Unable to load your saved budget.");
+        }
+      } finally {
+        if (!cancelled) {
+          isHydratingCloudRef.current = false;
+          setIsBootstrapping(false);
+        }
+      }
+    };
+
+    void supabase.auth.getSession().then(({ data }) => {
+      void hydrateFromSession(data.session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      void hydrateFromSession(nextSession);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session || session.mode !== "cloud") {
+      return;
+    }
+
+    if (isHydratingCloudRef.current) {
+      return;
+    }
+
+    if (skipNextCloudSaveRef.current) {
+      skipNextCloudSaveRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+
+    void saveCloudState(session.userId, cloudState).catch((error) => {
+      if (!cancelled) {
+        flashMessage("error", error instanceof Error ? error.message : "Unable to sync your budget to the cloud.");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudState, session]);
 
   useEffect(() => {
     if (!flash) {
@@ -60,68 +187,108 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [flash]);
 
-  const summary = computeSummary(state.transactions);
-  const categoryBreakdown = buildCategoryBreakdown(state.transactions);
-  const monthlyTrend = buildMonthlyTrend(state.transactions, 6);
-  const weeklyTrend = buildWeeklyTrend(state.transactions, 8);
-  const insights = buildInsights(summary, state.transactions);
-  const adviceCards = aiAdvice ?? buildAdvice(summary, state.transactions);
+  const summary = computeSummary(cloudState.transactions);
+  const categoryBreakdown = buildCategoryBreakdown(cloudState.transactions);
+  const monthlyTrend = buildMonthlyTrend(cloudState.transactions, 6);
+  const weeklyTrend = buildWeeklyTrend(cloudState.transactions, 8);
+  const insights = buildInsights(summary, cloudState.transactions);
+  const adviceCards = aiAdvice ?? buildAdvice(summary, cloudState.transactions);
   const safeSavings = Math.max(summary.savings, 0);
   const protectedSavings = safeSavings * 0.6;
-  const convertedSavings = convertCurrency(protectedSavings, state.targetCurrency);
+  const convertedSavings = convertCurrency(protectedSavings, cloudState.targetCurrency);
   const projection = projectSavings(protectedSavings, Math.max(summary.cashFlow, 0), 12);
-  const goalProgress = state.smartSaveGoal > 0 ? Math.max(0, Math.min(100, (safeSavings / state.smartSaveGoal) * 100)) : 0;
+  const goalProgress =
+    cloudState.smartSaveGoal > 0 ? Math.max(0, Math.min(100, (safeSavings / cloudState.smartSaveGoal) * 100)) : 0;
 
   function flashMessage(type: Flash["type"], message: string) {
     setFlash({ type, message });
   }
 
-  function cloneDemoTransactions() {
-    return demoTransactions.map((transaction) => ({ ...transaction }));
-  }
+  function loadDemoData() {
+    const demoCloudState: CloudState = {
+      transactions: cloneDemoTransactions(),
+      smartSaveGoal: DEFAULT_SMART_SAVE_GOAL,
+      targetCurrency: "USD",
+    };
 
-  function loadDemoData(mode: "demo" | "local" = "demo") {
-    setState((current) => ({
+    appliedCloudUserIdRef.current = null;
+    isHydratingCloudRef.current = false;
+    skipNextCloudSaveRef.current = true;
+    setSession(buildDemoSession(email.trim() || "demo@smartbudget.app"));
+    setCloudState(demoCloudState);
+    setDeviceState((current) => ({
       ...current,
-      session: current.session ?? buildSession(email, mode),
       smsAccess: true,
       activeScreen: "dashboard",
-      transactions: current.transactions.length > 0 ? current.transactions : cloneDemoTransactions(),
     }));
     setAiAdvice(null);
-    flashMessage("success", "Demo data unlocked and SmartBudget is ready.");
+    setPassword("");
+    flashMessage("success", "Demo data loaded. Sign in to sync your own ledger to the cloud.");
   }
 
-  function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail || !trimmedEmail.includes("@") || !password.trim()) {
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail || !trimmedEmail.includes("@") || !trimmedPassword) {
       flashMessage("warning", "Enter a valid email and password to continue.");
       return;
     }
 
-    setState((current) => ({
-      ...current,
-      session: buildSession(trimmedEmail, "local"),
-      smsAccess: false,
-      activeScreen: "dashboard",
-      transactions: current.transactions.length > 0 ? current.transactions : cloneDemoTransactions(),
-    }));
-    setAiAdvice(null);
-    flashMessage("success", `${authMode === "signup" ? "Account created" : "Welcome back"} for ${trimmedEmail}.`);
+    if (!supabase) {
+      flashMessage("error", "Configure Supabase to enable real sign in and cloud storage.");
+      return;
+    }
+
+    setIsAuthenticating(true);
+
+    try {
+      if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: trimmedEmail,
+          password: trimmedPassword,
+          options: {
+            data: {
+              name: displayNameFromEmail(trimmedEmail),
+            },
+          },
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.session) {
+          flashMessage("success", "Account created. Loading your cloud budget...");
+        } else {
+          flashMessage("neutral", "Check your email to confirm the account, then sign in again.");
+        }
+        setPassword("");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: trimmedEmail,
+          password: trimmedPassword,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        flashMessage("success", "Signed in. Loading your cloud budget...");
+        setPassword("");
+      }
+    } catch (error) {
+      flashMessage("error", error instanceof Error ? error.message : "Unable to authenticate.");
+    } finally {
+      setIsAuthenticating(false);
+    }
   }
 
   async function handleAllowSmsAccess() {
     if (!isAndroidNative) {
-      setState((current) => ({
-        ...current,
-        smsAccess: true,
-        activeScreen: "dashboard",
-        transactions: current.transactions.length > 0 ? current.transactions : cloneDemoTransactions(),
-      }));
-      setAiAdvice(null);
-      flashMessage("success", "SMS access enabled. Import your first message now.");
+      flashMessage("neutral", "SMS inbox access is only available on Android. Use demo SMS or paste a message on the dashboard.");
       return;
     }
 
@@ -133,27 +300,28 @@ function App() {
         .map(convertAndroidSmsMessageToTransaction)
         .filter((transaction): transaction is Transaction => transaction !== null);
 
+      setDeviceState((current) => ({
+        ...current,
+        smsAccess: true,
+        activeScreen: "dashboard",
+      }));
+
       if (importedTransactions.length === 0) {
-        setState((current) => ({
-          ...current,
-          smsAccess: true,
-          activeScreen: "dashboard",
-        }));
         setAiAdvice(null);
         flashMessage("warning", "SMS permission granted, but no financial messages were found on this device.");
         return;
       }
 
       let addedCount = 0;
-      setState((current) => {
-        const mergedTransactions = mergeImportedTransactions(current.transactions, importedTransactions);
-        addedCount = mergedTransactions.length - current.transactions.length;
-
+      setCloudState((current) => {
+        const merged = mergeTransactions(current.transactions, importedTransactions);
+        addedCount = merged.addedCount;
+        if (merged.addedCount === 0) {
+          return current;
+        }
         return {
           ...current,
-          smsAccess: true,
-          activeScreen: "dashboard",
-          transactions: mergedTransactions,
+          transactions: merged.transactions,
         };
       });
 
@@ -170,28 +338,41 @@ function App() {
     }
   }
 
-  function handleSignOut() {
-    setState((current) => ({
+  async function handleSignOut() {
+    if (session?.mode === "cloud" && supabase) {
+      try {
+        await supabase.auth.signOut();
+        flashMessage("neutral", "Signed out of SmartBudget.");
+      } catch (error) {
+        flashMessage("error", error instanceof Error ? error.message : "Unable to sign out.");
+      }
+      return;
+    }
+
+    appliedCloudUserIdRef.current = null;
+    isHydratingCloudRef.current = false;
+    skipNextCloudSaveRef.current = true;
+    setSession(null);
+    setCloudState(createDefaultCloudState());
+    setAiAdvice(null);
+    setPassword("");
+    setDeviceState((current) => ({
       ...current,
-      session: null,
-      smsAccess: false,
       activeScreen: "dashboard",
     }));
-    setAiAdvice(null);
-    setIsImportingNativeSms(false);
     flashMessage("neutral", "Signed out of SmartBudget.");
   }
 
   function updateScreen(nextScreen: ScreenKey) {
-    setState((current) => ({ ...current, activeScreen: nextScreen }));
+    setDeviceState((current) => ({ ...current, activeScreen: nextScreen }));
   }
 
   function updateGoal(value: number) {
-    setState((current) => ({ ...current, smartSaveGoal: value }));
+    setCloudState((current) => ({ ...current, smartSaveGoal: value }));
   }
 
   function updateTargetCurrency(value: CurrencyCode) {
-    setState((current) => ({ ...current, targetCurrency: value }));
+    setCloudState((current) => ({ ...current, targetCurrency: value }));
   }
 
   async function handleAnalyzeSms() {
@@ -238,24 +419,35 @@ function App() {
       ...transaction,
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
-      rawSms: smsDraft,
+      rawSms: smsDraft.trim(),
       source: "sms" as const,
     };
 
-    setState((current) => ({
-      ...current,
-      transactions: [imported, ...current.transactions],
-      activeScreen: "transactions",
-    }));
+    let addedCount = 0;
+    setCloudState((current) => {
+      const merged = mergeTransactions(current.transactions, [imported]);
+      addedCount = merged.addedCount;
+      if (merged.addedCount === 0) {
+        return current;
+      }
+      return {
+        ...current,
+        transactions: merged.transactions,
+      };
+    });
+
+    if (addedCount === 0) {
+      flashMessage("neutral", "This SMS is already in your ledger.");
+      return;
+    }
+
     setAiAdvice(null);
-    flashMessage(
-      "success",
-      `Imported ${imported.merchant} · ${formatMoney(imported.amount, imported.currency)} as ${imported.category}.`,
-    );
+    setDeviceState((current) => ({ ...current, activeScreen: "transactions" }));
+    flashMessage("success", `Imported ${imported.merchant} · ${formatMoney(imported.amount, imported.currency)} as ${imported.category}.`);
   }
 
   function deleteTransaction(id: string) {
-    setState((current) => ({
+    setCloudState((current) => ({
       ...current,
       transactions: current.transactions.filter((transaction) => transaction.id !== id),
     }));
@@ -264,7 +456,7 @@ function App() {
   }
 
   async function refreshAdvice() {
-    const fallback = buildAdvice(summary, state.transactions);
+    const fallback = buildAdvice(summary, cloudState.transactions);
     setIsRefreshingAdvice(true);
 
     try {
@@ -276,7 +468,7 @@ function App() {
         body: JSON.stringify({
           data: {
             summary,
-            transactions: state.transactions,
+            transactions: cloudState.transactions,
             categoryBreakdown,
             monthlyTrend,
           },
@@ -308,7 +500,11 @@ function App() {
     flashMessage("warning", "AI endpoint was unavailable, so SmartBudget used local advice.");
   }
 
-  if (!state.session) {
+  if (isBootstrapping) {
+    return <LoadingScreen flash={flash} />;
+  }
+
+  if (!session) {
     return (
       <div className="app-root">
         <AuthScreen
@@ -319,20 +515,22 @@ function App() {
           onEmailChange={setEmail}
           onPasswordChange={setPassword}
           onSubmit={handleAuthSubmit}
-          onTryDemo={() => loadDemoData("demo")}
+          onTryDemo={loadDemoData}
+          cloudReady={isSupabaseConfigured}
+          isAuthenticating={isAuthenticating}
         />
         <Toast flash={flash} />
       </div>
     );
   }
 
-  if (!state.smsAccess) {
+  if (isAndroidNative && !deviceState.smsAccess) {
     return (
       <div className="app-root">
         <PermissionScreen
           sampleSms={demoSmsSamples}
           onAllowSmsAccess={handleAllowSmsAccess}
-          onUseDemoData={() => loadDemoData("demo")}
+          onUseDemoData={loadDemoData}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
         />
@@ -344,10 +542,10 @@ function App() {
   return (
     <div className="app-root">
       <AppShell
-        session={state.session}
-        activeScreen={state.activeScreen}
+        session={session}
+        activeScreen={deviceState.activeScreen}
         summary={summary}
-        transactions={state.transactions}
+        transactions={cloudState.transactions}
         isAndroidNative={isAndroidNative}
         smsDraft={smsDraft}
         setSmsDraft={setSmsDraft}
@@ -356,8 +554,8 @@ function App() {
         protectedSavings={protectedSavings}
         convertedSavings={convertedSavings}
         projection={projection}
-        targetCurrency={state.targetCurrency}
-        smartSaveGoal={state.smartSaveGoal}
+        targetCurrency={cloudState.targetCurrency}
+        smartSaveGoal={cloudState.smartSaveGoal}
         isAnalyzingSms={isAnalyzingSms}
         isImportingNativeSms={isImportingNativeSms}
         isRefreshingAdvice={isRefreshingAdvice}
@@ -368,7 +566,7 @@ function App() {
         onRefreshAdvice={refreshAdvice}
         onAnalyzeSms={handleAnalyzeSms}
         onImportNativeSms={handleAllowSmsAccess}
-        onUseDemoData={() => loadDemoData("demo")}
+        onUseDemoData={loadDemoData}
         onDeleteTransaction={deleteTransaction}
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}
@@ -379,83 +577,64 @@ function App() {
   );
 }
 
-function loadInitialState(): PersistedState {
-  if (typeof window === "undefined") {
-    return createDefaultState();
-  }
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return createDefaultState();
-    }
-
-    const parsed = JSON.parse(raw) as Partial<PersistedState>;
-    return {
-      session:
-        parsed.session && typeof parsed.session.email === "string"
-          ? {
-              email: parsed.session.email,
-              name: parsed.session.name || parsed.session.email.split("@")[0],
-              mode: parsed.session.mode === "demo" ? "demo" : "local",
-            }
-          : null,
-      smsAccess: Boolean(parsed.smsAccess),
-      activeScreen: isScreenKey(parsed.activeScreen) ? parsed.activeScreen : "dashboard",
-      transactions:
-        Array.isArray(parsed.transactions) && parsed.transactions.length > 0
-          ? (parsed.transactions as Transaction[]).map(normalizeTransactionSource)
-          : cloneDemoTransactions(),
-      smartSaveGoal: typeof parsed.smartSaveGoal === "number" ? parsed.smartSaveGoal : DEFAULT_GOAL,
-      targetCurrency: parsed.targetCurrency === "USD" || parsed.targetCurrency === "EUR" ? parsed.targetCurrency : "USD",
-    };
-  } catch {
-    return createDefaultState();
-  }
-}
-
-function createDefaultState(): PersistedState {
-  return {
-    session: null,
-    smsAccess: false,
-    activeScreen: "dashboard",
-    transactions: cloneDemoTransactions(),
-    smartSaveGoal: DEFAULT_GOAL,
-    targetCurrency: "USD",
-  };
+function LoadingScreen({ flash }: { flash: Flash | null }) {
+  return (
+    <div className="app-root">
+      <div className="auth-layout">
+        <Panel title="SmartBudget" subtitle="Syncing your cloud account" className="hero-panel auth-hero">
+          <div className="hero-badge">SmartBudget</div>
+          <h1>Loading your saved budget.</h1>
+          <p>Fetching your cloud account, then preparing the dashboard and native SMS flow.</p>
+          <div className="hero-preview">
+            <div className="hero-preview__card">
+              <span>Status</span>
+              <strong>Connecting</strong>
+            </div>
+            <div className="hero-preview__card hero-preview__card--accent">
+              <span>Storage</span>
+              <strong>Supabase</strong>
+            </div>
+          </div>
+        </Panel>
+      </div>
+      <Toast flash={flash} />
+    </div>
+  );
 }
 
 function cloneDemoTransactions() {
   return demoTransactions.map((transaction) => ({ ...transaction }));
 }
 
-function normalizeTransactionSource(transaction: Transaction): Transaction {
-  if (transaction.source === "sms" || transaction.source === "manual") {
-    return transaction;
-  }
-
+function buildDemoSession(email: string): Session {
   return {
-    ...transaction,
-    source: "manual",
+    userId: "demo",
+    email,
+    name: "Demo User",
+    mode: "demo",
   };
 }
 
-function isScreenKey(value: unknown): value is ScreenKey {
-  return value === "dashboard" || value === "transactions" || value === "analysis" || value === "save" || value === "advice";
+function buildSessionFromSupabase(session: SupabaseSession): Session {
+  const email = session.user.email?.trim().toLowerCase() || "student@smartbudget.app";
+  const metadataName = typeof session.user.user_metadata?.name === "string" ? session.user.user_metadata.name.trim() : "";
+
+  return {
+    userId: session.user.id,
+    email,
+    name: metadataName || displayNameFromEmail(email),
+    mode: "cloud",
+  };
 }
 
-function buildSession(email: string, mode: Session["mode"]): Session {
-  const name = email
-    .split("@")[0]
+function displayNameFromEmail(email: string) {
+  const prefix = email.split("@")[0] ?? "smartbudget user";
+  const name = prefix
     .replace(/[._-]+/g, " ")
     .trim()
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-  return {
-    email,
-    name: name || "SmartBudget User",
-    mode,
-  };
+  return name || "SmartBudget User";
 }
 
 function sanitizeAdviceCard(card: unknown): AdviceCard | null {
@@ -466,6 +645,7 @@ function sanitizeAdviceCard(card: unknown): AdviceCard | null {
   const value = card as Record<string, unknown>;
   const title = typeof value.title === "string" ? value.title.trim() : "";
   const description = typeof value.description === "string" ? value.description.trim() : "";
+
   if (!title || !description) {
     return null;
   }
@@ -494,18 +674,18 @@ function convertAndroidSmsMessageToTransaction(message: AndroidSmsInboxMessage):
   };
 }
 
-function mergeImportedTransactions(existing: Transaction[], imported: Transaction[]) {
+function mergeTransactions(existing: Transaction[], incoming: Transaction[]) {
   const seenSms = new Set(
     existing
       .map((transaction) => transaction.rawSms?.trim())
       .filter((value): value is string => Boolean(value)),
   );
-
+  const seenIds = new Set(existing.map((transaction) => transaction.id));
   const merged: Transaction[] = [];
 
-  for (const transaction of imported) {
+  for (const transaction of incoming) {
     const rawSms = transaction.rawSms?.trim();
-    if (rawSms && seenSms.has(rawSms)) {
+    if (seenIds.has(transaction.id) || (rawSms && seenSms.has(rawSms))) {
       continue;
     }
 
@@ -513,10 +693,14 @@ function mergeImportedTransactions(existing: Transaction[], imported: Transactio
       seenSms.add(rawSms);
     }
 
+    seenIds.add(transaction.id);
     merged.push(transaction);
   }
 
-  return [...merged, ...existing];
+  return {
+    transactions: [...merged, ...existing],
+    addedCount: merged.length,
+  };
 }
 
 export default App;

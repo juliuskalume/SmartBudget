@@ -275,7 +275,7 @@ export function DashboardScreen({
                 <div>
                   <strong>{transaction.merchant}</strong>
                   <span>
-                    {formatDateLabel(transaction.date)} · {transaction.category} · {transaction.source.toUpperCase()}
+                    {formatDateLabel(transaction.date)} - {transaction.category} - {transaction.source.toUpperCase()}
                   </span>
                 </div>
                 <strong className={transaction.kind === "income" ? "positive" : "negative"}>

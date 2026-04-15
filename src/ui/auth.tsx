@@ -18,6 +18,8 @@ export function AuthScreen({
   onPasswordChange,
   onSubmit,
   onTryDemo,
+  cloudReady,
+  isAuthenticating,
 }: {
   mode: "login" | "signup";
   email: string;
@@ -27,17 +29,19 @@ export function AuthScreen({
   onPasswordChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onTryDemo: () => void;
+  cloudReady: boolean;
+  isAuthenticating: boolean;
 }) {
   return (
     <div className="auth-layout">
-      <Panel title="SmartBudget" subtitle="AI-powered student finance assistant" className="hero-panel auth-hero">
+      <Panel title="SmartBudget" subtitle="Cloud-synced student finance assistant" className="hero-panel auth-hero">
         <div className="hero-badge">
           <PiggyBank size={16} />
           SmartBudget
         </div>
         <h1>Manage smart. Save smarter.</h1>
         <p>
-          Track student finances from bank SMS, auto-tag expenses with AI, and protect spare cash with Smart Save+.
+          Track student finances from bank SMS, auto-tag expenses with AI, sync everything to your account, and protect spare cash with Smart Save+.
         </p>
 
         <div className="hero-stats">
@@ -62,7 +66,7 @@ export function AuthScreen({
           </div>
           <div className="hero-preview__card hero-preview__card--accent">
             <span>Latest import</span>
-            <strong>Migros · 150 TL</strong>
+            <strong>Migros - 150 TL</strong>
           </div>
         </div>
       </Panel>
@@ -105,10 +109,22 @@ export function AuthScreen({
           </label>
 
           <div className="button-row">
-            <button className="button button--primary" type="submit">
-              {mode === "login" ? <><CheckCircle2 size={16} /> Login</> : <><BadgeDollarSign size={16} /> Create account</>}
+            <button className="button button--primary" type="submit" disabled={isAuthenticating}>
+              {isAuthenticating ? (
+                <span>{mode === "login" ? "Signing in..." : "Creating account..."}</span>
+              ) : mode === "login" ? (
+                <>
+                  <CheckCircle2 size={16} />
+                  Login
+                </>
+              ) : (
+                <>
+                  <BadgeDollarSign size={16} />
+                  Create account
+                </>
+              )}
             </button>
-            <button className="button button--secondary" type="button" onClick={onTryDemo}>
+            <button className="button button--secondary" type="button" onClick={onTryDemo} disabled={isAuthenticating}>
               <Sparkles size={16} />
               Try Demo
             </button>
@@ -117,7 +133,9 @@ export function AuthScreen({
 
         <div className="auth-note">
           <ShieldCheck size={16} />
-          Connect your bank via SMS permission after login. No bank API is required.
+          {cloudReady
+            ? "Your account and transactions sync to Supabase after login. Android SMS import stays local until the parsed transaction is saved."
+            : "Configure Supabase to enable real login and cloud sync. Demo mode still works for previews."}
         </div>
       </Panel>
     </div>
@@ -142,7 +160,7 @@ export function PermissionScreen({
       <Panel title="SMS permission" subtitle="Connect your financial data securely" className="permission-panel">
         <p className="lede">
           {isAndroidNative
-            ? "SmartBudget reads bank SMS messages from your phone with your permission, extracts the merchant and amount, then auto-categorizes the transaction for the dashboard."
+            ? "SmartBudget reads bank SMS messages from your phone with your permission, extracts the merchant and amount, then turns the message into a saved transaction."
             : "SmartBudget reads bank SMS messages with your permission, extracts the merchant and amount, then auto-categorizes the transaction for the dashboard."}
         </p>
 
@@ -161,7 +179,7 @@ export function PermissionScreen({
           <strong>Your data stays private</strong>
           <p>
             {isAndroidNative
-              ? "On Android, SMS content is read locally after permission is granted. The browser never receives your inbox data."
+              ? "On Android, SMS content is read locally after permission is granted. Only the parsed transaction details are saved to your account."
               : "SMS content is used only for local analysis and optional AI categorization."}
           </p>
         </div>

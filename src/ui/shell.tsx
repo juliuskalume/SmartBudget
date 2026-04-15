@@ -42,8 +42,8 @@ export function AppShell({
   onUpdateGoal,
   onUpdateTargetCurrency,
   onFillSampleSms,
-}: {
-  session: { email: string; name: string; mode: "demo" | "local" };
+  }: {
+  session: { email: string; name: string };
   activeScreen: ScreenKey;
   summary: FinancialSummary;
   transactions: Transaction[];

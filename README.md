@@ -1,16 +1,63 @@
-
 # SmartBudget
 
-AI-powered student finance app prototype.
+SmartBudget is a cloud-backed personal finance app for students. It combines SMS-based transaction import, AI categorization, spending analysis, and Smart Save+ value protection.
 
-## Run
+## Stack
+
+- React + Vite frontend
+- Supabase auth and per-user cloud storage
+- Groq-powered AI endpoints for categorization and advice
+- Capacitor Android wrapper for native SMS import
+
+## Local Setup
 
 ```bash
 npm install
+```
+
+Create a `.env` file from `.env.example`:
+
+```bash
+VITE_SUPABASE_URL="https://your-project.supabase.co"
+VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
+GROQ_API_KEY="your-groq-api-key"
+```
+
+Run the local dev server:
+
+```bash
 npm run dev
 ```
 
+The local server provides the `/api/ai/*` routes used by the app.
+
+## Supabase
+
+Run the SQL in [supabase/schema.sql](./supabase/schema.sql) in your Supabase project.
+
+That creates the `user_app_state` table used to store:
+
+- transactions
+- Smart Save+ goal
+- target currency
+
+Supabase auth owns the user session. Browser local storage is only used for device-level UI state such as the active screen and Android SMS permission hint.
+
+## Vercel
+
+This repo is ready to host on Vercel.
+
+Use these environment variables in Vercel:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `GROQ_API_KEY`
+
+Vercel will serve the Vite build and the serverless functions in `api/ai/*`.
+
 ## Android
+
+Build the native Android wrapper with Capacitor:
 
 ```bash
 npm run build
@@ -18,13 +65,13 @@ npm run android:sync
 npm run android:open
 ```
 
-The Android app is packaged with Capacitor and runs the SmartBudget UI in a native WebView.
-If the local backend is not running, the app falls back to local parsing and advice.
+The Android app includes native SMS inbox import. SMS content is read locally on the device after permission is granted, then parsed transactions are saved to the user's cloud account.
 
-## Features
+## Scripts
 
-- SMS-based transaction import
-- Automatic transaction categorization
-- Financial dashboard and spending analysis
-- Smart Save+ value protection simulator
-- AI recommendation cards
+- `npm run dev` - local dev server with AI API routes
+- `npm run build` - production frontend build
+- `npm run preview` - preview the built app
+- `npm run android:sync` - build and sync Capacitor Android
+- `npm run android:open` - open Android Studio
+- `npm run android:run` - run on an attached Android device
