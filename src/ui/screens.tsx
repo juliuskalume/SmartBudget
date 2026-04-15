@@ -68,6 +68,7 @@ export function DashboardScreen({
   categoryBreakdown,
   monthlyTrend,
   recentTransactions,
+  allowDemoTools,
   insights,
   isAndroidNative,
   smsDraft,
@@ -85,6 +86,7 @@ export function DashboardScreen({
   categoryBreakdown: ReturnType<typeof buildCategoryBreakdown>;
   monthlyTrend: ReturnType<typeof buildMonthlyTrend>;
   recentTransactions: Transaction[];
+  allowDemoTools: boolean;
   insights: string[];
   isAndroidNative: boolean;
   smsDraft: string;
@@ -99,15 +101,18 @@ export function DashboardScreen({
   onSetScreen: (screen: ScreenKey) => void;
 }) {
   const latestTransactions = recentTransactions.slice(0, 4);
+  const hasTransactions = recentTransactions.length > 0;
 
   return (
     <div className="screen-stack">
       <section className="hero-strip panel">
         <div className="hero-strip__copy">
           <p className="eyebrow">Live dashboard</p>
-          <h2>Health score {Math.round(summary.healthScore)} / 100</h2>
+          <h2>{hasTransactions ? `Health score ${Math.round(summary.healthScore)} / 100` : "Your ledger is ready for the first import."}</h2>
           <p>
-            Track savings rate, expense pressure, and Smart Save+ progress before spending decisions drift off course.
+            {hasTransactions
+              ? "Track savings rate, expense pressure, and Smart Save+ progress before spending decisions drift off course."
+              : "Paste a real bank SMS or import messages from your phone to start the dashboard with live account data."}
           </p>
           <div className="button-row">
             <button className="button button--primary" type="button" onClick={() => onSetScreen("save")}>
@@ -121,9 +126,22 @@ export function DashboardScreen({
           </div>
         </div>
 
-        <div className="hero-strip__dial">
-          <HealthDial score={summary.healthScore} />
-        </div>
+        {hasTransactions ? (
+          <div className="hero-strip__dial">
+            <HealthDial score={summary.healthScore} />
+          </div>
+        ) : (
+          <div className="hero-strip__stack">
+            <div className="summary-chip">
+              <span>Status</span>
+              <strong>Awaiting first import</strong>
+            </div>
+            <div className="summary-chip summary-chip--accent">
+              <span>Ledger</span>
+              <strong>0 transactions</strong>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="metric-grid">
@@ -152,9 +170,11 @@ export function DashboardScreen({
         >
           <div className="stack">
             <div className="button-row">
-              <button className="button button--secondary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])} disabled={isImportingNativeSms}>
-                Sample SMS
-              </button>
+              {allowDemoTools ? (
+                <button className="button button--secondary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])} disabled={isImportingNativeSms}>
+                  Sample SMS
+                </button>
+              ) : null}
               {isAndroidNative ? (
                 <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
                   <ScanText size={16} />
@@ -167,7 +187,7 @@ export function DashboardScreen({
               value={smsDraft}
               onChange={(event) => setSmsDraft(event.target.value)}
               rows={5}
-              placeholder="Paste an SMS transaction..."
+              placeholder="Paste a real bank SMS or card alert..."
             />
             <div className="button-row">
               <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
@@ -250,14 +270,18 @@ export function DashboardScreen({
 
       <section className="dashboard-grid dashboard-grid--bottom">
         <Panel title="Insights" subtitle="What the model is seeing right now.">
-          <div className="insight-list">
-            {insights.map((insight) => (
-              <div className="insight-row" key={insight}>
-                <CheckCircle2 size={16} />
-                <p>{insight}</p>
-              </div>
-            ))}
-          </div>
+          {hasTransactions ? (
+            <div className="insight-list">
+              {insights.map((insight) => (
+                <div className="insight-row" key={insight}>
+                  <CheckCircle2 size={16} />
+                  <p>{insight}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No insights yet" description="Import a few real transactions and SmartBudget will start surfacing patterns here." />
+          )}
         </Panel>
 
         <Panel
@@ -269,22 +293,26 @@ export function DashboardScreen({
             </button>
           }
         >
-          <div className="transaction-snippets">
-            {latestTransactions.map((transaction) => (
-              <div className="transaction-snippet" key={transaction.id}>
-                <div>
-                  <strong>{transaction.merchant}</strong>
-                  <span>
-                    {formatDateLabel(transaction.date)} - {transaction.category} - {transaction.source.toUpperCase()}
-                  </span>
+          {latestTransactions.length > 0 ? (
+            <div className="transaction-snippets">
+              {latestTransactions.map((transaction) => (
+                <div className="transaction-snippet" key={transaction.id}>
+                  <div>
+                    <strong>{transaction.merchant}</strong>
+                    <span>
+                      {formatDateLabel(transaction.date)} - {transaction.category} - {transaction.source.toUpperCase()}
+                    </span>
+                  </div>
+                  <strong className={transaction.kind === "income" ? "positive" : "negative"}>
+                    {transaction.kind === "income" ? "+" : "-"}
+                    {formatMoney(transaction.amount, transaction.currency)}
+                  </strong>
                 </div>
-                <strong className={transaction.kind === "income" ? "positive" : "negative"}>
-                  {transaction.kind === "income" ? "+" : "-"}
-                  {formatMoney(transaction.amount, transaction.currency)}
-                </strong>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No imports yet" description="Your ledger stays empty until you save a real SMS transaction." />
+          )}
         </Panel>
       </section>
 
@@ -305,11 +333,13 @@ export function DashboardScreen({
 
 export function TransactionsScreen({
   transactions,
+  allowDemoTools,
   onDeleteTransaction,
   onFillSampleSms,
   onSetScreen,
 }: {
   transactions: Transaction[];
+  allowDemoTools: boolean;
   onDeleteTransaction: (id: string) => void;
   onFillSampleSms: (value: string) => void;
   onSetScreen: (screen: ScreenKey) => void;
@@ -426,13 +456,19 @@ export function TransactionsScreen({
             </table>
           ) : (
             <EmptyState
-              title="Nothing matches your filters"
-              description="Try clearing the search bar or importing another SMS transaction."
+              title={transactions.length === 0 ? "Your ledger is empty" : "Nothing matches your filters"}
+              description={
+                transactions.length === 0
+                  ? "Import a real bank SMS from the dashboard to create the first entry."
+                  : "Try clearing the search bar or importing another SMS transaction."
+              }
               action={
-                <button className="button button--primary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])}>
-                  <ScanText size={16} />
-                  Load sample SMS
-                </button>
+                allowDemoTools && transactions.length === 0 ? (
+                  <button className="button button--primary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])}>
+                    <ScanText size={16} />
+                    Load sample SMS
+                  </button>
+                ) : undefined
               }
             />
           )}

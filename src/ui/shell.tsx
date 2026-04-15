@@ -17,6 +17,7 @@ export function AppShell({
   activeScreen,
   summary,
   transactions,
+  allowDemoTools,
   isAndroidNative,
   smsDraft,
   setSmsDraft,
@@ -47,6 +48,7 @@ export function AppShell({
   activeScreen: ScreenKey;
   summary: FinancialSummary;
   transactions: Transaction[];
+  allowDemoTools: boolean;
   isAndroidNative: boolean;
   smsDraft: string;
   setSmsDraft: (value: string) => void;
@@ -83,6 +85,7 @@ export function AppShell({
     monthlyTrend,
     weeklyTrend,
     transactions,
+    allowDemoTools,
     isAndroidNative,
     smsDraft,
     setSmsDraft,
@@ -191,6 +194,7 @@ function renderScreen({
   monthlyTrend,
   weeklyTrend,
   transactions,
+  allowDemoTools,
   isAndroidNative,
   smsDraft,
   setSmsDraft,
@@ -221,6 +225,7 @@ function renderScreen({
   monthlyTrend: ReturnType<typeof buildMonthlyTrend>;
   weeklyTrend: ReturnType<typeof buildWeeklyTrend>;
   transactions: Transaction[];
+  allowDemoTools: boolean;
   isAndroidNative: boolean;
   smsDraft: string;
   setSmsDraft: (value: string) => void;
@@ -253,6 +258,7 @@ function renderScreen({
           categoryBreakdown={categoryBreakdown}
           monthlyTrend={monthlyTrend}
           recentTransactions={transactions.slice(0, 6)}
+          allowDemoTools={allowDemoTools}
           insights={insights}
           isAndroidNative={isAndroidNative}
           smsDraft={smsDraft}
@@ -271,6 +277,7 @@ function renderScreen({
       return (
         <TransactionsScreen
           transactions={transactions}
+          allowDemoTools={allowDemoTools}
           onDeleteTransaction={onDeleteTransaction}
           onFillSampleSms={onFillSampleSms}
           onSetScreen={onSelectScreen}

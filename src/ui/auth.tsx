@@ -65,12 +65,12 @@ export function AuthScreen({
 
         <div className="hero-preview">
           <div className="hero-preview__card">
-            <span>Financial health</span>
-            <strong>78 / 100</strong>
+            <span>Cloud sync</span>
+            <strong>Private account storage</strong>
           </div>
           <div className="hero-preview__card hero-preview__card--accent">
-            <span>Latest import</span>
-            <strong>Migros - 150 TL</strong>
+            <span>First import</span>
+            <strong>Starts empty until you add data</strong>
           </div>
         </div>
       </Panel>
@@ -157,15 +157,15 @@ export function AuthScreen({
 }
 
 export function PermissionScreen({
-  sampleSms,
   onAllowSmsAccess,
   onUseDemoData,
+  allowDemoData,
   isAndroidNative,
   isImportingNativeSms,
 }: {
-  sampleSms: string[];
   onAllowSmsAccess: () => void;
   onUseDemoData: () => void;
+  allowDemoData: boolean;
   isAndroidNative: boolean;
   isImportingNativeSms: boolean;
 }) {
@@ -183,10 +183,12 @@ export function PermissionScreen({
             {isAndroidNative ? <ScanText size={16} /> : <CheckCircle2 size={16} />}
             {isImportingNativeSms ? "Importing..." : isAndroidNative ? "Import from phone" : "Allow SMS Access"}
           </button>
-          <button className="button button--secondary" type="button" onClick={onUseDemoData} disabled={isImportingNativeSms}>
-            <ScanText size={16} />
-            Use demo SMS
-          </button>
+          {allowDemoData ? (
+            <button className="button button--secondary" type="button" onClick={onUseDemoData} disabled={isImportingNativeSms}>
+              <ScanText size={16} />
+              Use demo SMS
+            </button>
+          ) : null}
         </div>
 
         <div className="privacy-card">
@@ -199,20 +201,22 @@ export function PermissionScreen({
         </div>
       </Panel>
 
-      <Panel title="Message preview" subtitle="Sample bank alerts that the parser can understand." className="sms-preview-panel">
+      <Panel title="What happens next" subtitle="Your account starts empty. Only real imports create ledger entries." className="sms-preview-panel">
         <div className="phone-mockup">
           <div className="phone-mockup__top" />
           <div className="phone-mockup__screen">
             <div className="phone-message phone-message--system">
               <strong>SmartBudget</strong>
-              <p>To track expenses automatically, we need SMS permission.</p>
+              <p>Grant SMS access to let SmartBudget scan bank senders on this device.</p>
             </div>
-            {sampleSms.map((message) => (
-              <div className="phone-message" key={message}>
-                <ScanText size={15} />
-                <p>{message}</p>
-              </div>
-            ))}
+            <div className="phone-message">
+              <ScanText size={15} />
+              <p>Merchant, amount, date, and direction are parsed locally from matching bank messages.</p>
+            </div>
+            <div className="phone-message">
+              <ShieldCheck size={15} />
+              <p>Only the parsed transaction details are saved to your ledger after import.</p>
+            </div>
           </div>
         </div>
       </Panel>

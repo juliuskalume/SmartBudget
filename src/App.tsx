@@ -50,7 +50,7 @@ function App() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("student@smartbudget.app");
   const [password, setPassword] = useState("");
-  const [smsDraft, setSmsDraft] = useState(demoSmsSamples[0]);
+  const [smsDraft, setSmsDraft] = useState("");
   const [flash, setFlash] = useState<Flash | null>(null);
   const [aiAdvice, setAiAdvice] = useState<AdviceCard[] | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -86,6 +86,7 @@ function App() {
         skipNextCloudSaveRef.current = true;
         setSession(null);
         setCloudState(createDefaultCloudState());
+        setSmsDraft("");
         setAiAdvice(null);
         setPassword("");
         setIsBootstrapping(false);
@@ -120,11 +121,13 @@ function App() {
 
         skipNextCloudSaveRef.current = true;
         setCloudState(hydrated);
+        setSmsDraft("");
         setAiAdvice(null);
       } catch (error) {
         if (!cancelled) {
           skipNextCloudSaveRef.current = true;
           setCloudState(createDefaultCloudState());
+          setSmsDraft("");
           flashMessage("error", error instanceof Error ? error.message : "Unable to load your saved budget.");
         }
       } finally {
@@ -216,6 +219,7 @@ function App() {
     skipNextCloudSaveRef.current = true;
     setSession(buildDemoSession(email.trim() || "demo@smartbudget.app"));
     setCloudState(demoCloudState);
+    setSmsDraft(demoSmsSamples[0]);
     setDeviceState((current) => ({
       ...current,
       smsAccess: true,
@@ -356,6 +360,7 @@ function App() {
     skipNextCloudSaveRef.current = true;
     setSession(null);
     setCloudState(createDefaultCloudState());
+    setSmsDraft("");
     setAiAdvice(null);
     setPassword("");
     setDeviceState((current) => ({
@@ -538,9 +543,9 @@ function App() {
     return (
       <div className="app-root app-root--scroll">
         <PermissionScreen
-          sampleSms={demoSmsSamples}
           onAllowSmsAccess={handleAllowSmsAccess}
           onUseDemoData={loadDemoData}
+          allowDemoData={session.mode === "demo"}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
         />
@@ -556,6 +561,7 @@ function App() {
         activeScreen={deviceState.activeScreen}
         summary={summary}
         transactions={cloudState.transactions}
+        allowDemoTools={session.mode === "demo"}
         isAndroidNative={isAndroidNative}
         smsDraft={smsDraft}
         setSmsDraft={setSmsDraft}

@@ -499,6 +499,14 @@ export function buildWeeklyTrend(transactions: Transaction[], weeks = 8) {
 }
 
 export function buildInsights(summary: FinancialSummary, transactions: Transaction[]) {
+  if (transactions.length === 0) {
+    return [
+      "Import your first bank SMS to start the ledger.",
+      "Category trends appear after SmartBudget saves real spending data.",
+      "Use Smart Save+ after income and expenses are tracked.",
+    ];
+  }
+
   const categoryBreakdown = buildCategoryBreakdown(transactions);
   const monthlyTrend = buildMonthlyTrend(transactions, 2);
 
@@ -540,6 +548,26 @@ export function buildInsights(summary: FinancialSummary, transactions: Transacti
 }
 
 export function buildAdvice(summary: FinancialSummary, transactions: Transaction[]): AdviceCard[] {
+  if (transactions.length === 0) {
+    return [
+      {
+        type: "warning",
+        title: "Import the first transaction",
+        description: "Paste a bank SMS or import messages from your phone so SmartBudget can build your ledger.",
+      },
+      {
+        type: "warning",
+        title: "Track one income source",
+        description: "Add scholarship, salary, or transfer entries so savings rate and cash flow become meaningful.",
+      },
+      {
+        type: "success",
+        title: "Cloud sync is ready",
+        description: "Your account starts empty. Only transactions you import or save will appear here.",
+      },
+    ];
+  }
+
   const categoryBreakdown = buildCategoryBreakdown(transactions);
   const topCategory = categoryBreakdown[0];
   const entertainment = categoryBreakdown.find((entry) => entry.category === "Entertainment");
