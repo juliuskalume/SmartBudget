@@ -17,12 +17,12 @@ export const CATEGORY_ORDER: Category[] = [
 ];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
-  Supermarket: "#54f1a3",
-  Transport: "#7dd3fc",
-  Entertainment: "#f0c36e",
-  Bills: "#ff9f9f",
-  Education: "#a78bfa",
-  Other: "#94a3b8",
+  Supermarket: "#93ff00",
+  Transport: "#2db7ff",
+  Entertainment: "#ff4fd8",
+  Bills: "#fffd02",
+  Education: "#d8dde8",
+  Other: "#ff9a1f",
 };
 
 export const FX_RATES: Record<CurrencyCode, number> = {

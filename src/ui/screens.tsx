@@ -48,28 +48,28 @@ import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./
 
 const chartTooltipStyle = {
   contentStyle: {
-    backgroundColor: "rgba(11,16,28,0.96)",
-    border: "1px solid rgba(78,124,255,0.18)",
-    borderRadius: 18,
-    boxShadow: "0 20px 36px rgba(0,0,0,0.42)",
-    color: "#f8fbff",
+    backgroundColor: "rgba(7,7,7,0.98)",
+    border: "1px solid rgba(255,253,2,0.28)",
+    borderRadius: 20,
+    boxShadow: "0 22px 40px rgba(0,0,0,0.48)",
+    color: "#fffef2",
   },
   labelStyle: {
-    color: "#9aa4c4",
+    color: "#fff38a",
     fontWeight: 700,
   },
   itemStyle: {
-    color: "#f8fbff",
+    color: "#fffef2",
   },
   cursor: {
-    fill: "rgba(78,124,255,0.08)",
+    fill: "rgba(255,253,2,0.08)",
   },
 };
 
 const chartAxisProps = {
   axisLine: false,
   tickLine: false,
-  tick: { fill: "#7f8bab", fontSize: 11 },
+  tick: { fill: "#d5cc8a", fontSize: 11 },
 };
 
 const categoryIconMap = {
@@ -800,7 +800,7 @@ export function AnalysisScreen({
         <ChartFrame height={260}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
-              <CartesianGrid stroke="rgba(127,139,171,0.12)" vertical={false} />
+              <CartesianGrid stroke="rgba(255,253,2,0.12)" vertical={false} />
               <XAxis dataKey="label" {...chartAxisProps} />
               <YAxis {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
               <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value)), "Spend"]} />
@@ -808,7 +808,7 @@ export function AnalysisScreen({
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`${entry.label}-${index}`}
-                    fill={index % 4 === 2 ? "#9dc7ff" : index % 3 === 0 ? "#70abff" : "#4d84ff"}
+                    fill={index % 4 === 0 ? "#fffd02" : index % 4 === 1 ? "#2db7ff" : index % 4 === 2 ? "#ff4fd8" : "#93ff00"}
                   />
                 ))}
               </Bar>
@@ -961,12 +961,12 @@ export function SmartSaveScreen({
         <Panel title="Projected growth" subtitle="Protected value over the next 12 months.">
           <ChartFrame height={320}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={projection}>
-                <CartesianGrid stroke="#e7edf4" vertical={false} />
-                <XAxis dataKey="label" stroke="#cbd5e1" {...chartAxisProps} />
-                <YAxis stroke="#cbd5e1" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
+            <LineChart data={projection}>
+                <CartesianGrid stroke="rgba(255,253,2,0.12)" vertical={false} />
+                <XAxis dataKey="label" stroke="#d5cc8a" {...chartAxisProps} />
+                <YAxis stroke="#d5cc8a" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
                 <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value)), "Projected value"]} />
-                <Line type="monotone" dataKey="tryValue" stroke="#54f1a3" strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="tryValue" stroke="#fffd02" strokeWidth={3} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -1239,7 +1239,7 @@ export function AdviceScreen({
                         <span
                           style={{
                             width: `${Math.max(8, Math.min(100, Math.abs(asset.returnPct)))}%`,
-                            background: asset.returnPct >= 0 ? "#4c84ff" : "#ff6b86",
+                            background: asset.returnPct >= 0 ? "#fffd02" : "#ff4fd8",
                           }}
                         />
                       </div>
