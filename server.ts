@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { categorizeSmsText, generateAdviceCards } from "./server/ai";
+import { buildWhatIfScenario } from "./server/markets";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +42,19 @@ async function startServer() {
     } catch (error) {
       console.error("Groq Error:", error);
       res.status(500).json({ error: "AI advice failed" });
+    }
+  });
+
+  app.get("/api/markets/what-if", async (req, res) => {
+    const period = typeof req.query.period === "string" ? req.query.period : "3m";
+    const amount = Number(req.query.amount);
+
+    try {
+      const result = await buildWhatIfScenario(period as "1m" | "3m" | "6m" | "1y", amount);
+      res.json(result);
+    } catch (error) {
+      console.error("Market what-if error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Unable to build market scenario" });
     }
   });
 

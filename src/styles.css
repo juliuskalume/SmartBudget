@@ -2011,6 +2011,39 @@ body::before {
   box-shadow: 0 22px 40px rgba(0, 0, 0, 0.36);
 }
 
+.what-if-controls {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.what-if-panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(114, 144, 255, 0.1);
+  background: linear-gradient(180deg, rgba(17, 24, 38, 0.98), rgba(12, 18, 29, 0.98));
+}
+
+.what-if-panel__hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.what-if-panel__hero h3 {
+  margin-top: 0.3rem;
+  margin-bottom: 0.2rem;
+  font-size: 1.18rem;
+  color: var(--sb-on-surface);
+}
+
+.what-if-panel__hero p {
+  color: var(--sb-on-surface-variant);
+  line-height: 1.5;
+}
+
 @media (min-width: 640px) {
   .permission-actions {
     flex-wrap: nowrap;
@@ -2022,6 +2055,11 @@ body::before {
 
   .converter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .what-if-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
   }
 }
 

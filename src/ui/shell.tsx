@@ -9,7 +9,7 @@ import {
   Wallet,
 } from "lucide-react";
 import type { AdviceCard, CurrencyCode, FinancialSummary, ScreenKey, Transaction } from "../types";
-import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, projectSavings } from "../lib/finance";
+import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
 import { AdviceScreen, AnalysisScreen, DashboardScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
 
 export function AppShell({
@@ -319,6 +319,8 @@ function renderScreen({
           summary={summary}
           adviceCards={adviceCards}
           insights={insights}
+          defaultWhatIfAmountUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD") : 100}
+          isBackedBySavings={protectedSavings > 0}
           isRefreshingAdvice={isRefreshingAdvice}
           onRefreshAdvice={onRefreshAdvice}
         />

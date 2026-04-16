@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -43,7 +43,7 @@ import {
   projectSavings,
   CATEGORY_COLORS,
 } from "../lib/finance";
-import type { AdviceCard, Category, CurrencyCode, FinancialSummary, ScreenKey, Transaction } from "../types";
+import type { AdviceCard, Category, CurrencyCode, FinancialSummary, ScreenKey, Transaction, WhatIfPeriod, WhatIfScenario } from "../types";
 import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./shared";
 
 const chartTooltipStyle = {
@@ -832,15 +832,84 @@ export function AdviceScreen({
   summary,
   adviceCards,
   insights,
+  defaultWhatIfAmountUsd,
+  isBackedBySavings,
   isRefreshingAdvice,
   onRefreshAdvice,
 }: {
   summary: FinancialSummary;
   adviceCards: AdviceCard[];
   insights: string[];
+  defaultWhatIfAmountUsd: number;
+  isBackedBySavings: boolean;
   isRefreshingAdvice: boolean;
   onRefreshAdvice: () => void;
 }) {
+  const [whatIfPeriod, setWhatIfPeriod] = useState<WhatIfPeriod>("3m");
+  const [amountInput, setAmountInput] = useState(() => formatAmountInput(defaultWhatIfAmountUsd));
+  const [committedAmount, setCommittedAmount] = useState(() => normalizeWhatIfAmount(defaultWhatIfAmountUsd));
+  const [whatIfScenario, setWhatIfScenario] = useState<WhatIfScenario | null>(null);
+  const [whatIfError, setWhatIfError] = useState<string | null>(null);
+  const [isLoadingWhatIf, setIsLoadingWhatIf] = useState(false);
+
+  useEffect(() => {
+    const amount = normalizeWhatIfAmount(committedAmount);
+
+    if (amount <= 0) {
+      setWhatIfScenario(null);
+      setWhatIfError("Enter a simulation amount greater than zero.");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadScenario() {
+      setIsLoadingWhatIf(true);
+      setWhatIfError(null);
+
+      try {
+        const response = await fetch(`/api/markets/what-if?period=${whatIfPeriod}&amount=${amount}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to load the what-if scenario.");
+        }
+
+        if (!cancelled) {
+          setWhatIfScenario(payload as WhatIfScenario);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setWhatIfScenario(null);
+          setWhatIfError(error instanceof Error ? error.message : "Unable to load the what-if scenario.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingWhatIf(false);
+        }
+      }
+    }
+
+    void loadScenario();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [committedAmount, whatIfPeriod]);
+
+  function applyWhatIfAmount() {
+    const nextAmount = Number(amountInput);
+
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+      setWhatIfError("Enter a simulation amount greater than zero.");
+      return;
+    }
+
+    const normalized = normalizeWhatIfAmount(nextAmount);
+    setCommittedAmount(normalized);
+    setAmountInput(formatAmountInput(normalized));
+  }
+
   return (
     <div className="screen-stack">
       <section className="hero-strip panel">
@@ -864,6 +933,130 @@ export function AdviceScreen({
           </article>
         ))}
       </section>
+
+      <Panel title="What If You Invested?" subtitle="See what your money would be worth today if it had been placed into the strongest performer in our tracked market basket.">
+        <div className="stack">
+          <div className="segment-switch segment-switch--wide">
+            {[
+              { key: "1m", label: "1 Month" },
+              { key: "3m", label: "3 Months" },
+              { key: "6m", label: "6 Months" },
+              { key: "1y", label: "1 Year" },
+            ].map((option) => (
+              <button
+                className={`segment-switch__button ${whatIfPeriod === option.key ? "segment-switch__button--active" : ""}`}
+                key={option.key}
+                type="button"
+                onClick={() => setWhatIfPeriod(option.key as WhatIfPeriod)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="what-if-controls">
+            <label className="field">
+              <span>Simulation amount (USD)</span>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                step="1"
+                value={amountInput}
+                onChange={(event) => setAmountInput(event.target.value)}
+              />
+            </label>
+            <button className="button button--secondary" type="button" onClick={applyWhatIfAmount} disabled={isLoadingWhatIf}>
+              {isLoadingWhatIf ? "Running..." : "Run What If"}
+            </button>
+          </div>
+
+          <p className="helper-copy">
+            {isBackedBySavings
+              ? "This starts with your current protected savings converted to USD. Change the amount to test a different scenario."
+              : "No protected savings are available yet, so the simulation starts with a manual USD amount."}
+          </p>
+
+          {whatIfScenario ? (
+            <div className="what-if-panel">
+              <div className="what-if-panel__hero">
+                <div>
+                  <span className="eyebrow">Best Performer</span>
+                  <h3>{whatIfScenario.bestAsset.name}</h3>
+                  <p>
+                    {whatIfScenario.bestAsset.symbol} · {whatIfScenario.bestAsset.category} · {whatIfScenario.periodLabel}
+                  </p>
+                </div>
+                <strong className={whatIfScenario.bestAsset.gain >= 0 ? "positive" : "negative"}>
+                  {whatIfScenario.bestAsset.gain >= 0 ? "+" : "-"}
+                  {formatMoney(Math.abs(whatIfScenario.bestAsset.gain), "USD")}
+                </strong>
+              </div>
+
+              <div className="summary-grid">
+                <div className="summary-card">
+                  <span>Invested</span>
+                  <strong>{formatMoney(whatIfScenario.amount, "USD")}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Worth Now</span>
+                  <strong>{formatMoney(whatIfScenario.bestAsset.currentValue, "USD")}</strong>
+                </div>
+                <div className="summary-card">
+                  <span>Return</span>
+                  <strong className={whatIfScenario.bestAsset.returnPct >= 0 ? "positive" : "negative"}>
+                    {whatIfScenario.bestAsset.returnPct >= 0 ? "+" : "-"}
+                    {Math.abs(whatIfScenario.bestAsset.returnPct).toFixed(1)}%
+                  </strong>
+                </div>
+                <div className="summary-card">
+                  <span>Window</span>
+                  <strong>
+                    {formatDateLabel(whatIfScenario.startDate)} to {formatDateLabel(whatIfScenario.endDate)}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="category-breakdown-list">
+                {whatIfScenario.assets.slice(0, 4).map((asset) => (
+                  <div className="breakdown-row" key={`${asset.symbol}-${asset.startDate}`}>
+                    <div className="breakdown-row__icon">
+                      <TrendingUp size={18} />
+                    </div>
+                    <div className="breakdown-row__body">
+                      <div className="breakdown-row__meta">
+                        <div>
+                          <strong>{asset.name}</strong>
+                          <span>{asset.category}</span>
+                        </div>
+                        <div className="breakdown-row__amount">
+                          <strong>{formatMoney(asset.currentValue, "USD")}</strong>
+                          <span className={asset.returnPct >= 0 ? "positive" : "negative"}>
+                            {asset.returnPct >= 0 ? "+" : "-"}
+                            {Math.abs(asset.returnPct).toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mini-progress mini-progress--colored">
+                        <span
+                          style={{
+                            width: `${Math.max(8, Math.min(100, Math.abs(asset.returnPct)))}%`,
+                            background: asset.returnPct >= 0 ? "#4c84ff" : "#ff6b86",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <p className="helper-copy">{whatIfScenario.disclaimer}</p>
+            </div>
+          ) : null}
+
+          {whatIfError ? <div className="auth-note auth-note--signup">{whatIfError}</div> : null}
+        </div>
+      </Panel>
 
       <section className="dashboard-grid dashboard-grid--bottom">
         <Panel title="Behavior snapshot" subtitle="The three signals the model currently considers most important.">
@@ -896,4 +1089,13 @@ export function AdviceScreen({
       </section>
     </div>
   );
+}
+
+function normalizeWhatIfAmount(value: number) {
+  return Number.isFinite(value) ? Math.max(1, Math.round(value * 100) / 100) : 100;
+}
+
+function formatAmountInput(value: number) {
+  const normalized = normalizeWhatIfAmount(value);
+  return normalized.toFixed(2).replace(/\.00$/, "");
 }

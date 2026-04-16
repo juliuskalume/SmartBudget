@@ -35,6 +35,34 @@ export interface AdviceCard {
   description: string;
 }
 
+export type WhatIfPeriod = "1m" | "3m" | "6m" | "1y";
+
+export interface WhatIfAssetPerformance {
+  symbol: string;
+  name: string;
+  category: string;
+  currency: string;
+  startDate: string;
+  endDate: string;
+  startPrice: number;
+  endPrice: number;
+  returnPct: number;
+  investedAmount: number;
+  currentValue: number;
+  gain: number;
+}
+
+export interface WhatIfScenario {
+  period: WhatIfPeriod;
+  periodLabel: string;
+  amount: number;
+  startDate: string;
+  endDate: string;
+  bestAsset: WhatIfAssetPerformance;
+  assets: WhatIfAssetPerformance[];
+  disclaimer: string;
+}
+
 export interface FinancialSummary {
   totalIncome: number;
   totalExpenses: number;
