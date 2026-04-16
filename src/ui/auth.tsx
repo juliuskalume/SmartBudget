@@ -174,14 +174,14 @@ export function PermissionScreen({
       <Panel title="SMS permission" subtitle="Connect your financial data securely" className="permission-panel">
         <p className="lede">
           {isAndroidNative
-            ? "SmartBudget reads bank SMS messages from your phone with your permission, extracts the merchant and amount, then turns the message into a saved transaction."
+            ? "Grant SmartBudget access to existing and incoming SMS on this Android device. Matching bank or card alerts are checked automatically, and real debit or credit activity is added to your ledger."
             : "SmartBudget reads bank SMS messages with your permission, extracts the merchant and amount, then auto-categorizes the transaction for the dashboard."}
         </p>
 
         <div className="permission-actions">
           <button className="button button--primary" type="button" onClick={onAllowSmsAccess} disabled={isImportingNativeSms}>
             {isAndroidNative ? <ScanText size={16} /> : <CheckCircle2 size={16} />}
-            {isImportingNativeSms ? "Importing..." : isAndroidNative ? "Import from phone" : "Allow SMS Access"}
+            {isImportingNativeSms ? "Enabling..." : isAndroidNative ? "Enable SMS Auto Sync" : "Allow SMS Access"}
           </button>
           {allowDemoData ? (
             <button className="button button--secondary" type="button" onClick={onUseDemoData} disabled={isImportingNativeSms}>
@@ -195,7 +195,7 @@ export function PermissionScreen({
           <strong>Your data stays private</strong>
           <p>
             {isAndroidNative
-              ? "On Android, SMS content is read locally after permission is granted. Only the parsed transaction details are saved to your account."
+              ? "On Android, SmartBudget can read existing and incoming SMS after permission is granted. Only messages that look financial are classified, and only transaction data is saved to your account."
               : "SMS content is used only for local analysis and optional AI categorization."}
           </p>
         </div>
@@ -207,15 +207,15 @@ export function PermissionScreen({
           <div className="phone-mockup__screen">
             <div className="phone-message phone-message--system">
               <strong>SmartBudget</strong>
-              <p>Grant SMS access to let SmartBudget scan bank senders on this device.</p>
+              <p>Grant SMS access to let SmartBudget monitor bank alerts on this device and update the ledger automatically.</p>
             </div>
             <div className="phone-message">
               <ScanText size={15} />
-              <p>Merchant, amount, date, and direction are parsed locally from matching bank messages.</p>
+              <p>Existing inbox messages are scanned once, then each new bank SMS is checked as it arrives for debit or credit activity.</p>
             </div>
             <div className="phone-message">
               <ShieldCheck size={15} />
-              <p>Only the parsed transaction details are saved to your ledger after import.</p>
+              <p>Only confirmed transaction details are saved to your ledger. Cash spending can still be added manually later.</p>
             </div>
           </div>
         </div>

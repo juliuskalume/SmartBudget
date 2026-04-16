@@ -5,9 +5,12 @@ const groqApiKey = process.env.GROQ_API_KEY?.trim();
 const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;
 
 const categorizeFallback = {
+  isTransaction: false,
   merchant: "Unknown",
   amount: 0,
   category: "Other",
+  kind: "expense",
+  currency: "TRY",
 };
 
 function safeParseJson(value: string) {
@@ -29,7 +32,7 @@ export async function categorizeSmsText(smsText: string) {
         {
           role: "system",
           content:
-            "You are a financial assistant. Extract transaction details (merchant, amount, category) from SMS. Categories: Supermarket, Transport, Entertainment, Bills, Education, Other. Return ONLY JSON.",
+            "You are a financial assistant. Decide if an SMS is a real financial transaction alert. If it is, return isTransaction=true and extract merchant, amount, currency (TRY, USD, EUR), category (Supermarket, Transport, Entertainment, Bills, Education, Other), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). If it is not a transaction alert, return isTransaction=false. Return ONLY JSON.",
         },
         {
           role: "user",
@@ -42,9 +45,15 @@ export async function categorizeSmsText(smsText: string) {
 
     const result = safeParseJson(completion.choices[0].message.content || "{}");
     return {
+      isTransaction: typeof result?.isTransaction === "boolean" ? result.isTransaction : categorizeFallback.isTransaction,
       merchant: typeof result?.merchant === "string" ? result.merchant : categorizeFallback.merchant,
       amount: Number.isFinite(Number(result?.amount)) ? Number(result.amount) : categorizeFallback.amount,
       category: typeof result?.category === "string" ? result.category : categorizeFallback.category,
+      kind: result?.kind === "income" || result?.kind === "expense" ? result.kind : categorizeFallback.kind,
+      currency:
+        result?.currency === "USD" || result?.currency === "EUR" || result?.currency === "TRY"
+          ? result.currency
+          : categorizeFallback.currency,
     };
   } catch {
     return categorizeFallback;

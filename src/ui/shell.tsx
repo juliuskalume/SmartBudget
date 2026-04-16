@@ -8,7 +8,7 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
-import type { AdviceCard, CurrencyCode, FinancialSummary, ScreenKey, Transaction } from "../types";
+import type { AdviceCard, CurrencyCode, FinancialSummary, ManualTransactionDraft, ScreenKey, Transaction } from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
 import { AdviceScreen, AnalysisScreen, DashboardScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
 
@@ -38,7 +38,7 @@ export function AppShell({
   onRefreshAdvice,
   onAnalyzeSms,
   onImportNativeSms,
-  onUseDemoData,
+  onAddManualTransaction,
   onDeleteTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
@@ -69,7 +69,7 @@ export function AppShell({
   onRefreshAdvice: () => void;
   onAnalyzeSms: () => void;
   onImportNativeSms: () => void;
-  onUseDemoData: () => void;
+  onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
@@ -106,6 +106,7 @@ export function AppShell({
     insights,
     onSelectScreen,
     onDeleteTransaction,
+    onAddManualTransaction,
     onUpdateGoal,
     onUpdateTargetCurrency,
     onFillSampleSms,
@@ -208,6 +209,7 @@ function renderScreen({
   insights,
   onSelectScreen,
   onDeleteTransaction,
+  onAddManualTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
   onFillSampleSms,
@@ -240,6 +242,7 @@ function renderScreen({
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
   onDeleteTransaction: (id: string) => void;
+  onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onFillSampleSms: (value: string) => void;
@@ -280,6 +283,7 @@ function renderScreen({
           isAnalyzingSms={isAnalyzingSms}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
+          onAddManualTransaction={onAddManualTransaction}
           onDeleteTransaction={onDeleteTransaction}
           onFillSampleSms={onFillSampleSms}
           onAnalyzeSms={onAnalyzeSms}
@@ -342,7 +346,7 @@ function getHeaderMeta(activeScreen: ScreenKey) {
     case "transactions":
       return {
         title: "Add Transaction",
-        subtitle: "Import from SMS and review the ledger",
+        subtitle: "Auto SMS sync and manual debit / credit entry",
       };
     case "analysis":
       return {

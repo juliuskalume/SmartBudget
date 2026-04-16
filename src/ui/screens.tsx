@@ -43,7 +43,7 @@ import {
   projectSavings,
   CATEGORY_COLORS,
 } from "../lib/finance";
-import type { AdviceCard, Category, CurrencyCode, FinancialSummary, ScreenKey, Transaction, WhatIfPeriod, WhatIfScenario } from "../types";
+import type { AdviceCard, Category, CurrencyCode, FinancialSummary, ManualTransactionDraft, ScreenKey, Transaction, WhatIfPeriod, WhatIfScenario } from "../types";
 import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./shared";
 
 const chartTooltipStyle = {
@@ -80,6 +80,28 @@ const categoryIconMap = {
   Education: GraduationCap,
   Other: ShoppingBag,
 } as const;
+
+const transactionCategoryTiles = [
+  { label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
+  { label: "Transport", category: "Transport" as const, icon: BusFront },
+  { label: "Shopping", category: "Other" as const, icon: ShoppingBag },
+  { label: "Bills", category: "Bills" as const, icon: Receipt },
+  { label: "Entertainment", category: "Entertainment" as const, icon: Clapperboard },
+  { label: "Health", category: "Other" as const, icon: HeartPulse },
+  { label: "Home", category: "Bills" as const, icon: House },
+  { label: "Education", category: "Education" as const, icon: GraduationCap },
+];
+
+function createManualDraft(kind: Transaction["kind"] = "expense"): ManualTransactionDraft {
+  return {
+    merchant: "",
+    amount: 0,
+    currency: "TRY",
+    category: kind === "income" ? "Other" : "Supermarket",
+    kind,
+    date: new Date().toISOString().slice(0, 10),
+  };
+}
 
 export function DashboardScreen({
   summary,
@@ -197,39 +219,60 @@ export function DashboardScreen({
       </Panel>
 
       <section className="dashboard-grid dashboard-grid--bottom">
-        <Panel title="Quick Import" subtitle="Turn a bank SMS into a transaction.">
-          <div className="stack">
-            <div className="button-row button-row--tight">
-              {allowDemoTools ? (
-                <button className="button button--secondary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])} disabled={isImportingNativeSms}>
-                  Sample SMS
-                </button>
-              ) : null}
-              {isAndroidNative ? (
+        <Panel
+          title={isAndroidNative ? "Automatic SMS Sync" : "Quick Import"}
+          subtitle={isAndroidNative ? "Incoming bank SMS are classified automatically on Android." : "Turn a bank SMS into a transaction."}
+        >
+          {isAndroidNative ? (
+            <div className="stack">
+              <div className="sync-card">
+                <div className="sync-card__icon">
+                  <ScanText size={18} />
+                </div>
+                <div className="sync-card__content">
+                  <strong>Live bank-message monitoring is active</strong>
+                  <p>New transaction alerts are checked as they arrive. Cash spending can be added manually from the transaction screen.</p>
+                </div>
+              </div>
+              <div className="button-row button-row--tight">
                 <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
                   <ScanText size={16} />
-                  {isImportingNativeSms ? "Importing..." : "Import phone SMS"}
+                  {isImportingNativeSms ? "Scanning..." : "Scan existing inbox"}
                 </button>
-              ) : null}
+                <button className="button button--ghost" type="button" onClick={() => onSetScreen("transactions")}>
+                  <ReceiptText size={16} />
+                  Add Cash Entry
+                </button>
+              </div>
             </div>
-            <textarea
-              className="textarea textarea--compact"
-              value={smsDraft}
-              onChange={(event) => setSmsDraft(event.target.value)}
-              rows={4}
-              placeholder="Paste a real bank SMS or card alert..."
-            />
-            <div className="button-row button-row--tight">
-              <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
-                <Send size={16} />
-                {isAnalyzingSms ? "Analyzing..." : "Analyze SMS"}
-              </button>
-              <button className="button button--ghost" type="button" onClick={() => onSetScreen("transactions")}>
-                <ReceiptText size={16} />
-                Open Add Screen
-              </button>
+          ) : (
+            <div className="stack">
+              <div className="button-row button-row--tight">
+                {allowDemoTools ? (
+                  <button className="button button--secondary" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])} disabled={isImportingNativeSms}>
+                    Sample SMS
+                  </button>
+                ) : null}
+              </div>
+              <textarea
+                className="textarea textarea--compact"
+                value={smsDraft}
+                onChange={(event) => setSmsDraft(event.target.value)}
+                rows={4}
+                placeholder="Paste a real bank SMS or card alert..."
+              />
+              <div className="button-row button-row--tight">
+                <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
+                  <Send size={16} />
+                  {isAnalyzingSms ? "Analyzing..." : "Analyze SMS"}
+                </button>
+                <button className="button button--ghost" type="button" onClick={() => onSetScreen("transactions")}>
+                  <ReceiptText size={16} />
+                  Open Add Screen
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </Panel>
 
         <Panel
@@ -306,6 +349,7 @@ export function TransactionsScreen({
   isAnalyzingSms,
   isAndroidNative,
   isImportingNativeSms,
+  onAddManualTransaction,
   onDeleteTransaction,
   onFillSampleSms,
   onAnalyzeSms,
@@ -319,6 +363,7 @@ export function TransactionsScreen({
   isAnalyzingSms: boolean;
   isAndroidNative: boolean;
   isImportingNativeSms: boolean;
+  onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onDeleteTransaction: (id: string) => void;
   onFillSampleSms: (value: string) => void;
   onAnalyzeSms: () => void;
@@ -328,18 +373,10 @@ export function TransactionsScreen({
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
+  const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft());
   const parsedDraft = smsDraft.trim() ? parseSmsTransaction(smsDraft) : null;
   const activeKind = parsedDraft?.kind === "income" ? "income" : "expense";
-  const categoryTiles = [
-    { label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
-    { label: "Transport", category: "Transport" as const, icon: BusFront },
-    { label: "Shopping", category: "Other" as const, icon: ShoppingBag },
-    { label: "Bills", category: "Bills" as const, icon: Receipt },
-    { label: "Entertainment", category: "Entertainment" as const, icon: Clapperboard },
-    { label: "Health", category: "Other" as const, icon: HeartPulse },
-    { label: "Home", category: "Bills" as const, icon: House },
-    { label: "Education", category: "Education" as const, icon: GraduationCap },
-  ];
+  const manualAmountDisplay = manualDraft.amount > 0 ? formatMoney(manualDraft.amount, manualDraft.currency) : formatMoney(0, manualDraft.currency);
 
   const filtered = transactions.filter((transaction) => {
     const matchesQuery =
@@ -352,75 +389,234 @@ export function TransactionsScreen({
 
   return (
     <div className="screen-stack">
-      <Panel title="Transaction Composer" subtitle="Analyze an SMS, preview the category, then add it to the ledger." className="composer-panel">
+      {isAndroidNative ? (
+        <Panel title="Automatic SMS Sync" subtitle="SmartBudget listens for new bank SMS messages and classifies them in the background." className="composer-panel">
+          <div className="sync-card sync-card--full">
+            <div className="sync-card__icon">
+              <ScanText size={18} />
+            </div>
+            <div className="sync-card__content">
+              <strong>Incoming transaction alerts are checked automatically</strong>
+              <p>When a new bank or card message arrives, SmartBudget decides whether it is a debit or credit and updates the ledger if it is real transaction activity.</p>
+            </div>
+          </div>
+
+          <div className="composer-meta">
+            <div className="composer-meta__field">
+              <span>Status</span>
+              <strong>Live monitoring enabled</strong>
+            </div>
+            <div className="composer-meta__field">
+              <span>Fallback</span>
+              <strong>Manual cash entry below</strong>
+            </div>
+          </div>
+
+          <div className="button-row button-row--tight">
+            <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
+              <ScanText size={16} />
+              {isImportingNativeSms ? "Scanning..." : "Scan existing inbox"}
+            </button>
+            <button className="button button--ghost" type="button" onClick={() => onSetScreen("dashboard")}>
+              <ArrowRightLeft size={16} />
+              Back Home
+            </button>
+          </div>
+        </Panel>
+      ) : (
+        <Panel title="SMS Composer" subtitle="Paste a bank SMS, preview the category, then add it to the ledger." className="composer-panel">
+          <div className="segment-switch">
+            <button className={`segment-switch__button ${activeKind === "expense" ? "segment-switch__button--active" : ""}`} type="button">
+              Expense
+            </button>
+            <button className={`segment-switch__button ${activeKind === "income" ? "segment-switch__button--active" : ""}`} type="button">
+              Income
+            </button>
+          </div>
+
+          <div className="amount-panel">
+            <span>Amount</span>
+            <strong>{parsedDraft ? formatMoney(parsedDraft.amount, parsedDraft.currency) : formatMoney(0)}</strong>
+          </div>
+
+          <div className="category-tile-grid">
+            {transactionCategoryTiles.map((tile) => {
+              const Icon = tile.icon;
+              const active = parsedDraft?.category === tile.category;
+
+              return (
+                <div className={`category-tile ${active ? "category-tile--active" : ""}`} key={`${tile.label}-${tile.category}`}>
+                  <div className="category-tile__icon">
+                    <Icon size={18} />
+                  </div>
+                  <span>{tile.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <label className="field">
+            <span>Bank SMS</span>
+            <textarea
+              className="textarea textarea--compact"
+              value={smsDraft}
+              onChange={(event) => setSmsDraft(event.target.value)}
+              rows={4}
+              placeholder="Paste your bank SMS here..."
+            />
+          </label>
+
+          <div className="composer-meta">
+            <div className="composer-meta__field">
+              <span>Date</span>
+              <strong>{new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</strong>
+            </div>
+            <div className="composer-meta__field">
+              <span>Payment Method</span>
+              <strong>{parsedDraft ? (parsedDraft.kind === "income" ? "Transfer" : "Card / SMS") : "Pending"}</strong>
+            </div>
+          </div>
+
+          <div className="button-row button-row--tight">
+            <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
+              <Send size={16} />
+              {isAnalyzingSms ? "Analyzing..." : "Add Transaction"}
+            </button>
+            {allowDemoTools ? (
+              <button className="button button--ghost" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])}>
+                Sample SMS
+              </button>
+            ) : null}
+          </div>
+        </Panel>
+      )}
+
+      <Panel
+        title="Manual Debit / Credit"
+        subtitle={
+          isAndroidNative
+            ? "Use this when money moves without a bank SMS, such as cash spend or an offline credit."
+            : "Use this for cash, hand-to-hand transfers, or anything that did not come through SMS."
+        }
+        className="composer-panel"
+      >
         <div className="segment-switch">
-          <button className={`segment-switch__button ${activeKind === "expense" ? "segment-switch__button--active" : ""}`} type="button">
-            Expense
+          <button
+            className={`segment-switch__button ${manualDraft.kind === "expense" ? "segment-switch__button--active" : ""}`}
+            type="button"
+            onClick={() => setManualDraft((current) => ({ ...current, kind: "expense" }))}
+          >
+            Debit
           </button>
-          <button className={`segment-switch__button ${activeKind === "income" ? "segment-switch__button--active" : ""}`} type="button">
-            Income
+          <button
+            className={`segment-switch__button ${manualDraft.kind === "income" ? "segment-switch__button--active" : ""}`}
+            type="button"
+            onClick={() => setManualDraft((current) => ({ ...current, kind: "income" }))}
+          >
+            Credit
           </button>
         </div>
 
         <div className="amount-panel">
           <span>Amount</span>
-          <strong>{parsedDraft ? formatMoney(parsedDraft.amount, parsedDraft.currency) : formatMoney(0)}</strong>
+          <strong>{manualAmountDisplay}</strong>
         </div>
 
         <div className="category-tile-grid">
-          {categoryTiles.map((tile) => {
+          {transactionCategoryTiles.map((tile) => {
             const Icon = tile.icon;
-            const active = parsedDraft?.category === tile.category;
+            const active = manualDraft.category === tile.category;
 
             return (
-              <div className={`category-tile ${active ? "category-tile--active" : ""}`} key={`${tile.label}-${tile.category}`}>
+              <button
+                className={`category-tile ${active ? "category-tile--active" : ""}`}
+                type="button"
+                key={`manual-${tile.label}-${tile.category}`}
+                onClick={() => setManualDraft((current) => ({ ...current, category: tile.category }))}
+              >
                 <div className="category-tile__icon">
                   <Icon size={18} />
                 </div>
                 <span>{tile.label}</span>
-              </div>
+              </button>
             );
           })}
         </div>
 
-        <label className="field">
-          <span>Description</span>
-          <textarea
-            className="textarea textarea--compact"
-            value={smsDraft}
-            onChange={(event) => setSmsDraft(event.target.value)}
-            rows={4}
-            placeholder="Paste your bank SMS here..."
-          />
-        </label>
+        <div className="manual-grid">
+          <label className="field">
+            <span>Merchant / Note</span>
+            <input
+              className="input"
+              type="text"
+              value={manualDraft.merchant}
+              onChange={(event) => setManualDraft((current) => ({ ...current, merchant: event.target.value }))}
+              placeholder={manualDraft.kind === "income" ? "Scholarship, salary, refund..." : "Cash spend, kiosk, bus fare..."}
+            />
+          </label>
 
-        <div className="composer-meta">
-          <div className="composer-meta__field">
+          <label className="field">
+            <span>Amount</span>
+            <input
+              className="input"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={manualDraft.amount > 0 ? String(manualDraft.amount) : ""}
+              onChange={(event) =>
+                setManualDraft((current) => ({
+                  ...current,
+                  amount: event.target.value ? Number(event.target.value) : 0,
+                }))
+              }
+              placeholder="0.00"
+            />
+          </label>
+
+          <label className="field">
             <span>Date</span>
-            <strong>{new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}</strong>
-          </div>
-          <div className="composer-meta__field">
-            <span>Payment Method</span>
-            <strong>{parsedDraft ? (parsedDraft.kind === "income" ? "Transfer" : "Card / SMS") : "Pending"}</strong>
-          </div>
+            <input
+              className="input"
+              type="date"
+              value={manualDraft.date}
+              onChange={(event) => setManualDraft((current) => ({ ...current, date: event.target.value }))}
+            />
+          </label>
+
+          <label className="field">
+            <span>Currency</span>
+            <select
+              className="input"
+              value={manualDraft.currency}
+              onChange={(event) =>
+                setManualDraft((current) => ({
+                  ...current,
+                  currency: event.target.value as CurrencyCode,
+                }))
+              }
+            >
+              <option value="TRY">TRY</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </label>
         </div>
 
         <div className="button-row button-row--tight">
-          <button className="button button--primary" type="button" onClick={onAnalyzeSms} disabled={isAnalyzingSms}>
-            <Send size={16} />
-            {isAnalyzingSms ? "Analyzing..." : "Add Transaction"}
+          <button
+            className="button button--primary"
+            type="button"
+            onClick={() => {
+              const saved = onAddManualTransaction(manualDraft);
+              if (saved) {
+                setManualDraft(createManualDraft(manualDraft.kind));
+              }
+            }}
+          >
+            <BadgeDollarSign size={16} />
+            Save Manual Entry
           </button>
-          {isAndroidNative ? (
-            <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
-              <ScanText size={16} />
-              {isImportingNativeSms ? "Importing..." : "Phone SMS"}
-            </button>
-          ) : null}
-          {allowDemoTools ? (
-            <button className="button button--ghost" type="button" onClick={() => onFillSampleSms(demoSmsSamples[0])}>
-              Sample SMS
-            </button>
-          ) : null}
         </div>
       </Panel>
 
@@ -524,8 +720,10 @@ export function TransactionsScreen({
               title={transactions.length === 0 ? "Your ledger is empty" : "Nothing matches your filters"}
               description={
                 transactions.length === 0
-                  ? "Import a real bank SMS from the dashboard to create the first entry."
-                  : "Try clearing the search bar or importing another SMS transaction."
+                  ? isAndroidNative
+                    ? "Wait for the first bank SMS or add a manual cash entry above."
+                    : "Analyze a bank SMS or add a manual debit/credit above to create the first entry."
+                  : "Try clearing the search bar or import another transaction."
               }
               action={
                 allowDemoTools && transactions.length === 0 ? (

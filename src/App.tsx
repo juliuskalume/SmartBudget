@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
 import { demoSmsSamples, demoTransactions } from "./lib/demo";
-import { importAndroidSmsMessages, isAndroidNativePlatform, type AndroidSmsInboxMessage } from "./lib/android-sms";
+import {
+  consumePendingAndroidSmsMessages,
+  importAndroidSmsMessages,
+  isAndroidNativePlatform,
+  subscribeToAndroidSmsMessages,
+  type AndroidSmsInboxMessage,
+} from "./lib/android-sms";
 import {
   DEFAULT_SMART_SAVE_GOAL,
   createDefaultCloudState,
@@ -26,7 +32,7 @@ import {
   parseSmsTransaction,
   projectSavings,
 } from "./lib/finance";
-import type { AdviceCard, CurrencyCode, ScreenKey, Transaction } from "./types";
+import type { AdviceCard, CurrencyCode, ManualTransactionDraft, ScreenKey, Transaction } from "./types";
 import { AppShell } from "./ui/shell";
 import { AuthScreen, PermissionScreen } from "./ui/auth";
 import { Panel, Toast } from "./ui/shared";
@@ -41,6 +47,15 @@ type Session = {
 type Flash = {
   type: AdviceCard["type"] | "neutral";
   message: string;
+};
+
+type SmsClassification = {
+  isTransaction: boolean;
+  merchant: string;
+  amount: number;
+  category: Transaction["category"];
+  kind: Transaction["kind"];
+  currency: CurrencyCode;
 };
 
 function App() {
@@ -190,6 +205,50 @@ function App() {
     return () => window.clearTimeout(timer);
   }, [flash]);
 
+  useEffect(() => {
+    if (!isAndroidNative || !deviceState.smsAccess || !session) {
+      return;
+    }
+
+    let cancelled = false;
+    const subscription = subscribeToAndroidSmsMessages((message) => {
+      void ingestAndroidSmsMessages([message], { notifyOnImport: false, notifyWhenIgnored: false, notifyIfDuplicate: false });
+    });
+
+    const drainPending = async () => {
+      try {
+        const pending = await consumePendingAndroidSmsMessages();
+        if (!cancelled && pending.length > 0) {
+          await ingestAndroidSmsMessages(pending, { notifyOnImport: false, notifyWhenIgnored: false, notifyIfDuplicate: false });
+        }
+      } catch {
+        // Ignore background drain errors here; inbox import remains available.
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void drainPending();
+    }, 15000);
+
+    const handleForeground = () => {
+      if (document.visibilityState === "visible") {
+        void drainPending();
+      }
+    };
+
+    window.addEventListener("focus", handleForeground);
+    document.addEventListener("visibilitychange", handleForeground);
+    void drainPending();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleForeground);
+      document.removeEventListener("visibilitychange", handleForeground);
+      void Promise.resolve(subscription).then((listener) => listener?.remove());
+    };
+  }, [deviceState.smsAccess, isAndroidNative, session]);
+
   const summary = computeSummary(cloudState.transactions);
   const categoryBreakdown = buildCategoryBreakdown(cloudState.transactions);
   const monthlyTrend = buildMonthlyTrend(cloudState.transactions, 6);
@@ -294,7 +353,7 @@ function App() {
 
   async function handleAllowSmsAccess() {
     if (!isAndroidNative) {
-      flashMessage("neutral", "SMS inbox access is only available on Android. Use demo SMS or paste a message on the dashboard.");
+      flashMessage("neutral", "Automatic SMS sync is only available on Android. Use manual entry or analyze a pasted message on the web.");
       return;
     }
 
@@ -302,9 +361,6 @@ function App() {
 
     try {
       const inboxMessages = await importAndroidSmsMessages(80);
-      const importedTransactions = inboxMessages
-        .map(convertAndroidSmsMessageToTransaction)
-        .filter((transaction): transaction is Transaction => transaction !== null);
 
       setDeviceState((current) => ({
         ...current,
@@ -312,33 +368,28 @@ function App() {
         activeScreen: "dashboard",
       }));
 
-      if (importedTransactions.length === 0) {
-        setAiAdvice(null);
-        flashMessage("warning", "SMS permission granted, but no financial messages were found on this device.");
+      const outcome = await ingestAndroidSmsMessages(inboxMessages, {
+        notifyOnImport: false,
+        notifyWhenIgnored: false,
+        notifyIfDuplicate: false,
+      });
+
+      if (outcome.addedCount > 0) {
+        flashMessage(
+          "success",
+          `Automatic SMS sync is enabled. Imported ${outcome.addedCount} transaction${outcome.addedCount === 1 ? "" : "s"} from existing bank messages.`,
+        );
         return;
       }
 
-      let addedCount = 0;
-      setCloudState((current) => {
-        const merged = mergeTransactions(current.transactions, importedTransactions);
-        addedCount = merged.addedCount;
-        if (merged.addedCount === 0) {
-          return current;
-        }
-        return {
-          ...current,
-          transactions: merged.transactions,
-        };
-      });
-
-      setAiAdvice(null);
-      if (addedCount > 0) {
-        flashMessage("success", `Imported ${addedCount} SMS transaction${addedCount === 1 ? "" : "s"} from your phone.`);
-      } else {
-        flashMessage("neutral", "Your inbox messages were already imported.");
+      if (outcome.duplicateCount > 0) {
+        flashMessage("neutral", "Automatic SMS sync is enabled. Existing bank messages were already in your ledger.");
+        return;
       }
+
+      flashMessage("warning", "Automatic SMS sync is enabled, but no bank transaction messages were detected yet.");
     } catch (error) {
-      flashMessage("error", error instanceof Error ? error.message : "Unable to import SMS messages from your phone.");
+      flashMessage("error", error instanceof Error ? error.message : "Unable to enable automatic SMS sync on this device.");
     } finally {
       setIsImportingNativeSms(false);
     }
@@ -382,15 +433,23 @@ function App() {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
   }
 
-  async function handleAnalyzeSms() {
-    const parsed = parseSmsTransaction(smsDraft);
-    if (!parsed) {
-      flashMessage("warning", "Could not extract an amount from that SMS.");
-      return;
+  async function classifySmsTransaction(rawSms: string): Promise<SmsClassification | null> {
+    const trimmedSms = rawSms.trim();
+    if (!trimmedSms) {
+      return null;
     }
 
-    setIsAnalyzingSms(true);
-    let transaction = parsed;
+    const parsed = parseSmsTransaction(trimmedSms);
+    let fallback: SmsClassification | null = parsed
+      ? {
+          isTransaction: true,
+          merchant: parsed.merchant,
+          amount: parsed.amount,
+          category: parsed.category,
+          kind: parsed.kind,
+          currency: parsed.currency,
+        }
+      : null;
 
     try {
       const response = await fetch("/api/ai/categorize", {
@@ -398,59 +457,244 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ smsText: smsDraft }),
+        body: JSON.stringify({ smsText: trimmedSms }),
       });
 
       if (response.ok) {
         const aiResult = await response.json();
-        const aiAmount = Number(aiResult?.amount);
-        const aiMerchant = typeof aiResult?.merchant === "string" ? aiResult.merchant.trim() : "";
-        const aiCategory = typeof aiResult?.category === "string" ? normalizeCategory(aiResult.category) : transaction.category;
 
-        if (Number.isFinite(aiAmount) && aiAmount > 0) {
-          transaction = {
-            ...transaction,
-            amount: aiAmount,
-            merchant: aiMerchant && aiMerchant !== "Unknown" ? aiMerchant : transaction.merchant,
-            category: aiCategory,
+        if (aiResult?.isTransaction === false) {
+          return null;
+        }
+
+        const amount = Number(aiResult?.amount);
+        const merchant = typeof aiResult?.merchant === "string" ? aiResult.merchant.trim() : "";
+        const category = typeof aiResult?.category === "string" ? normalizeCategory(aiResult.category) : fallback?.category ?? "Other";
+        const kind = aiResult?.kind === "income" || aiResult?.kind === "expense" ? aiResult.kind : fallback?.kind ?? "expense";
+        const currency =
+          aiResult?.currency === "USD" || aiResult?.currency === "EUR" || aiResult?.currency === "TRY"
+            ? aiResult.currency
+            : fallback?.currency ?? "TRY";
+
+        if (Number.isFinite(amount) && amount > 0) {
+          fallback = {
+            isTransaction: true,
+            merchant: merchant && merchant !== "Unknown" ? merchant : fallback?.merchant ?? "Unknown Merchant",
+            amount,
+            category,
+            kind,
+            currency,
           };
         }
       }
     } catch {
-      // Local parsing is the fallback path when the AI endpoint is unavailable.
-    } finally {
-      setIsAnalyzingSms(false);
+      // Local parsing remains the fallback when the AI endpoint is unavailable.
     }
 
-    const imported = {
-      ...transaction,
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      rawSms: smsDraft.trim(),
-      source: "sms" as const,
+    if (!fallback || !Number.isFinite(fallback.amount) || fallback.amount <= 0) {
+      return null;
+    }
+
+    return fallback;
+  }
+
+  async function convertIncomingSmsToTransaction(message: AndroidSmsInboxMessage): Promise<Transaction | null> {
+    const rawSms = message.body.trim();
+    if (!rawSms) {
+      return null;
+    }
+
+    const classification = await classifySmsTransaction(rawSms);
+    if (!classification?.isTransaction) {
+      return null;
+    }
+
+    const date = Number.isFinite(message.date) ? new Date(message.date).toISOString() : new Date().toISOString();
+
+    return {
+      id: `sms-${message.id || crypto.randomUUID()}`,
+      date,
+      merchant: classification.merchant || "Unknown Merchant",
+      amount: classification.amount,
+      currency: classification.currency,
+      category: classification.category,
+      kind: classification.kind,
+      source: "sms",
+      rawSms,
     };
+  }
 
-    let addedCount = 0;
-    setCloudState((current) => {
-      const merged = mergeTransactions(current.transactions, [imported]);
-      addedCount = merged.addedCount;
-      if (merged.addedCount === 0) {
-        return current;
+  async function ingestAndroidSmsMessages(
+    messages: AndroidSmsInboxMessage[],
+    options: {
+      notifyOnImport?: boolean;
+      notifyWhenIgnored?: boolean;
+      notifyIfDuplicate?: boolean;
+    } = {},
+  ) {
+    const { notifyOnImport = true, notifyWhenIgnored = true, notifyIfDuplicate = true } = options;
+    if (messages.length === 0) {
+      if (notifyWhenIgnored) {
+        flashMessage("warning", "No SMS messages were available to process.");
       }
-      return {
-        ...current,
-        transactions: merged.transactions,
-      };
-    });
 
-    if (addedCount === 0) {
-      flashMessage("neutral", "This SMS is already in your ledger.");
+      return {
+        addedCount: 0,
+        ignoredCount: 0,
+        duplicateCount: 0,
+      };
+    }
+
+    const existingRawSms = new Set(
+      cloudState.transactions
+        .map((transaction) => transaction.rawSms?.trim())
+        .filter((value): value is string => Boolean(value)),
+    );
+    const seenIncoming = new Set<string>();
+    const candidates: AndroidSmsInboxMessage[] = [];
+    let duplicateCount = 0;
+
+    for (const message of messages) {
+      const rawSms = message.body.trim();
+      if (!rawSms) {
+        continue;
+      }
+
+      if (existingRawSms.has(rawSms) || seenIncoming.has(rawSms)) {
+        duplicateCount += 1;
+        continue;
+      }
+
+      seenIncoming.add(rawSms);
+      candidates.push(message);
+    }
+
+    const resolved = await Promise.all(candidates.map((message) => convertIncomingSmsToTransaction(message)));
+    const transactions = resolved.filter((transaction): transaction is Transaction => transaction !== null);
+    let addedCount = 0;
+
+    if (transactions.length > 0) {
+      setCloudState((current) => {
+        const merged = mergeTransactions(current.transactions, transactions);
+        addedCount = merged.addedCount;
+        if (merged.addedCount === 0) {
+          return current;
+        }
+
+        return {
+          ...current,
+          transactions: merged.transactions,
+        };
+      });
+    }
+
+    duplicateCount += Math.max(0, transactions.length - addedCount);
+    const ignoredCount = Math.max(0, candidates.length - transactions.length);
+
+    if (addedCount > 0) {
+      setAiAdvice(null);
+      if (notifyOnImport) {
+        flashMessage("success", `Added ${addedCount} transaction${addedCount === 1 ? "" : "s"} from bank SMS.`);
+      }
+    } else if (duplicateCount > 0 && notifyIfDuplicate) {
+      flashMessage("neutral", "These bank messages were already synced.");
+    } else if (ignoredCount > 0 && notifyWhenIgnored) {
+      flashMessage("warning", "SmartBudget scanned those messages, but none of them looked like bank transactions.");
+    }
+
+    return {
+      addedCount,
+      ignoredCount,
+      duplicateCount,
+    };
+  }
+
+  async function handleAnalyzeSms() {
+    const trimmedSms = smsDraft.trim();
+    if (!trimmedSms) {
+      flashMessage("warning", "Paste a bank SMS before asking SmartBudget to analyze it.");
       return;
     }
 
+    setIsAnalyzingSms(true);
+
+    try {
+      const classification = await classifySmsTransaction(trimmedSms);
+      if (!classification?.isTransaction) {
+        flashMessage("warning", "SmartBudget could not confirm that message as a transaction alert.");
+        return;
+      }
+
+      const imported: Transaction = {
+        id: crypto.randomUUID(),
+        date: new Date().toISOString(),
+        merchant: classification.merchant || "Unknown Merchant",
+        amount: classification.amount,
+        currency: classification.currency,
+        category: classification.category,
+        kind: classification.kind,
+        rawSms: trimmedSms,
+        source: "sms",
+      };
+
+      let addedCount = 0;
+      setCloudState((current) => {
+        const merged = mergeTransactions(current.transactions, [imported]);
+        addedCount = merged.addedCount;
+        if (merged.addedCount === 0) {
+          return current;
+        }
+        return {
+          ...current,
+          transactions: merged.transactions,
+        };
+      });
+
+      if (addedCount === 0) {
+        flashMessage("neutral", "This SMS is already in your ledger.");
+        return;
+      }
+
+      setAiAdvice(null);
+      setDeviceState((current) => ({ ...current, activeScreen: "transactions" }));
+      flashMessage("success", `Imported ${imported.merchant} - ${formatMoney(imported.amount, imported.currency)} as ${imported.category}.`);
+      setSmsDraft("");
+    } finally {
+      setIsAnalyzingSms(false);
+    }
+  }
+
+  function addManualTransaction(entry: ManualTransactionDraft) {
+    const merchant = entry.merchant.trim();
+    const amount = Number(entry.amount);
+    if (!merchant || !Number.isFinite(amount) || amount <= 0) {
+      flashMessage("warning", "Enter a merchant and a valid amount before saving a manual transaction.");
+      return false;
+    }
+
+    const normalizedDate = Number.isNaN(new Date(entry.date).getTime()) ? new Date().toISOString() : new Date(entry.date).toISOString();
+    const transaction: Transaction = {
+      id: crypto.randomUUID(),
+      date: normalizedDate,
+      merchant,
+      amount,
+      currency: entry.currency,
+      category: entry.category,
+      kind: entry.kind,
+      source: "manual",
+    };
+
+    setCloudState((current) => ({
+      ...current,
+      transactions: [transaction, ...current.transactions],
+    }));
     setAiAdvice(null);
     setDeviceState((current) => ({ ...current, activeScreen: "transactions" }));
-    flashMessage("success", `Imported ${imported.merchant} · ${formatMoney(imported.amount, imported.currency)} as ${imported.category}.`);
+    flashMessage(
+      "success",
+      `${transaction.kind === "income" ? "Credit" : "Debit"} added: ${transaction.merchant} - ${formatMoney(transaction.amount, transaction.currency)}.`,
+    );
+    return true;
   }
 
   function deleteTransaction(id: string) {
@@ -582,7 +826,7 @@ function App() {
         onRefreshAdvice={refreshAdvice}
         onAnalyzeSms={handleAnalyzeSms}
         onImportNativeSms={handleAllowSmsAccess}
-        onUseDemoData={loadDemoData}
+        onAddManualTransaction={addManualTransaction}
         onDeleteTransaction={deleteTransaction}
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}
@@ -675,23 +919,6 @@ function sanitizeAdviceCard(card: unknown): AdviceCard | null {
     type: normalizeAdviceType(typeof value.type === "string" ? value.type : "warning"),
     title,
     description,
-  };
-}
-
-function convertAndroidSmsMessageToTransaction(message: AndroidSmsInboxMessage): Transaction | null {
-  const parsed = parseSmsTransaction(message.body);
-  if (!parsed) {
-    return null;
-  }
-
-  const date = Number.isFinite(message.date) ? new Date(message.date).toISOString() : parsed.date;
-
-  return {
-    ...parsed,
-    id: `sms-${message.id || crypto.randomUUID()}`,
-    date,
-    rawSms: message.body.trim(),
-    source: "sms",
   };
 }
 

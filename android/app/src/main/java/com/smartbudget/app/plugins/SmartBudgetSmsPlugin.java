@@ -1,8 +1,12 @@
 package com.smartbudget.app.plugins;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.Cursor;
 import android.provider.Telephony;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -12,20 +16,29 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
-import java.text.Normalizer;
-import java.util.Locale;
-import java.util.regex.Pattern;
 
 @CapacitorPlugin(
     name = "SmartBudgetSms",
     permissions = {
-        @Permission(strings = { Manifest.permission.READ_SMS }, alias = "sms")
+        @Permission(strings = { Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS }, alias = "sms")
     }
 )
 public class SmartBudgetSmsPlugin extends Plugin {
 
     private static final String PERMISSION_ALIAS = "sms";
-    private static final Pattern CURRENCY_PATTERN = Pattern.compile(".*(\\d[\\d.,]*)\\s*(tl|try|usd|eur|\\$|\\u20ba|\\u20ac).*");
+    private BroadcastReceiver liveReceiver;
+
+    @Override
+    public void load() {
+        super.load();
+        registerLiveReceiver();
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        unregisterLiveReceiver();
+        super.handleOnDestroy();
+    }
 
     @PluginMethod
     public void importInbox(PluginCall call) {
@@ -37,6 +50,14 @@ public class SmartBudgetSmsPlugin extends Plugin {
         requestPermissionForAlias(PERMISSION_ALIAS, call, "smsPermissionCallback");
     }
 
+    @PluginMethod
+    public void consumePending(PluginCall call) {
+        JSArray messages = SmartBudgetSmsStore.consumeMessages(getContext());
+        JSObject result = new JSObject();
+        result.put("messages", messages);
+        call.resolve(result);
+    }
+
     @PermissionCallback
     private void smsPermissionCallback(PluginCall call) {
         if (getPermissionState(PERMISSION_ALIAS) != PermissionState.GRANTED) {
@@ -44,6 +65,7 @@ public class SmartBudgetSmsPlugin extends Plugin {
             return;
         }
 
+        registerLiveReceiver();
         readInbox(call);
     }
 
@@ -80,7 +102,7 @@ public class SmartBudgetSmsPlugin extends Plugin {
 
                 while (cursor.moveToNext() && count < limit) {
                     String body = cursor.getString(bodyColumn);
-                    if (!isLikelyFinancialSms(body)) {
+                    if (!SmartBudgetSmsUtils.isLikelyFinancialSms(body)) {
                         continue;
                     }
 
@@ -107,47 +129,49 @@ public class SmartBudgetSmsPlugin extends Plugin {
         }
     }
 
-    private boolean isLikelyFinancialSms(String body) {
-        if (body == null || body.trim().isEmpty()) {
-            return false;
+    private void registerLiveReceiver() {
+        if (liveReceiver != null) {
+            return;
         }
 
-        String text = normalizeText(body);
-        if (CURRENCY_PATTERN.matcher(text).matches()) {
-            return true;
-        }
+        liveReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(android.content.Context context, Intent intent) {
+                JSObject message = SmartBudgetSmsUtils.extractMessage(intent);
+                if (message == null) {
+                    return;
+                }
 
-        String[] cues = new String[] {
-            "harcama",
-            "odeme",
-            "payment",
-            "debit",
-            "credit",
-            "transfer",
-            "yatir",
-            "bakiye",
-            "spent",
-            "purchase",
-            "refund",
-            "iade",
-            "invoice",
-            "fatura",
-            "bill",
+                SmartBudgetSmsStore.queueMessage(
+                    context,
+                    message.optString("id", ""),
+                    message.optString("address", ""),
+                    message.optString("body", ""),
+                    message.optLong("date", System.currentTimeMillis()),
+                    false
+                );
+
+                JSObject event = new JSObject();
+                event.put("message", message);
+                notifyListeners("smsReceived", event, true);
+            }
         };
 
-        for (String cue : cues) {
-            if (text.contains(cue)) {
-                return true;
-            }
-        }
-
-        return false;
+        IntentFilter filter = new IntentFilter(Telephony.Sms.Intents.SMS_RECEIVED_ACTION);
+        ContextCompat.registerReceiver(getContext(), liveReceiver, filter, ContextCompat.RECEIVER_EXPORTED);
     }
 
-    private String normalizeText(String input) {
-        return Normalizer.normalize(input.toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
-            .replaceAll("\\p{M}+", "")
-            .replaceAll("\\s+", " ")
-            .trim();
+    private void unregisterLiveReceiver() {
+        if (liveReceiver == null) {
+            return;
+        }
+
+        try {
+            getContext().unregisterReceiver(liveReceiver);
+        } catch (IllegalArgumentException ignored) {
+            // Receiver was not registered or already removed.
+        } finally {
+            liveReceiver = null;
+        }
     }
 }

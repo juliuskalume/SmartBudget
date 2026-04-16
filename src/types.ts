@@ -29,6 +29,15 @@ export interface Transaction {
   rawSms?: string;
 }
 
+export interface ManualTransactionDraft {
+  merchant: string;
+  amount: number;
+  currency: CurrencyCode;
+  category: Category;
+  kind: TransactionKind;
+  date: string;
+}
+
 export interface AdviceCard {
   type: "success" | "warning" | "error";
   title: string;
