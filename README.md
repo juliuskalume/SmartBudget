@@ -77,6 +77,16 @@ The Android app includes native SMS inbox import. SMS content is read locally on
 
 The Android wrapper defaults to `https://hamid-smart-budget.vercel.app` and opens the hosted client URL instead of bundled `dist` assets. Set `APP_URL` only when you want to override that for staging or another deployment.
 
+For manual installs, use the Android SDK `platform-tools/adb` binary. Old `Minimal ADB and Fastboot` builds can fail on modern APK signatures with `INSTALL_PARSE_FAILED_NO_CERTIFICATES`.
+
+If USB `adb install` corrupts the APK in transit on your device or ROM, switch to wireless ADB:
+
+```bash
+adb tcpip 5555
+adb connect <phone-ip>:5555
+adb -s <phone-ip>:5555 install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## Scripts
 
 - `npm run dev` - local dev server with AI API routes
