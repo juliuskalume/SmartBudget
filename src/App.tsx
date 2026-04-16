@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
-import { demoSmsSamples, demoTransactions } from "./lib/demo";
+import { demoTransactions } from "./lib/demo";
 import {
   consumePendingAndroidSmsMessages,
   importAndroidSmsMessages,
@@ -65,11 +65,9 @@ function App() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("student@smartbudget.app");
   const [password, setPassword] = useState("");
-  const [smsDraft, setSmsDraft] = useState("");
   const [flash, setFlash] = useState<Flash | null>(null);
   const [aiAdvice, setAiAdvice] = useState<AdviceCard[] | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [isAnalyzingSms, setIsAnalyzingSms] = useState(false);
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(Boolean(isSupabaseConfigured));
@@ -101,7 +99,6 @@ function App() {
         skipNextCloudSaveRef.current = true;
         setSession(null);
         setCloudState(createDefaultCloudState());
-        setSmsDraft("");
         setAiAdvice(null);
         setPassword("");
         setIsBootstrapping(false);
@@ -136,13 +133,11 @@ function App() {
 
         skipNextCloudSaveRef.current = true;
         setCloudState(hydrated);
-        setSmsDraft("");
         setAiAdvice(null);
       } catch (error) {
         if (!cancelled) {
           skipNextCloudSaveRef.current = true;
           setCloudState(createDefaultCloudState());
-          setSmsDraft("");
           flashMessage("error", error instanceof Error ? error.message : "Unable to load your saved budget.");
         }
       } finally {
@@ -278,7 +273,6 @@ function App() {
     skipNextCloudSaveRef.current = true;
     setSession(buildDemoSession(email.trim() || "demo@smartbudget.app"));
     setCloudState(demoCloudState);
-    setSmsDraft(demoSmsSamples[0]);
     setDeviceState((current) => ({
       ...current,
       smsAccess: true,
@@ -353,7 +347,7 @@ function App() {
 
   async function handleAllowSmsAccess() {
     if (!isAndroidNative) {
-      flashMessage("neutral", "Automatic SMS sync is only available on Android. Use manual entry or analyze a pasted message on the web.");
+      flashMessage("neutral", "Automatic SMS sync is only available in the Android app. Use manual debit or credit entry here.");
       return;
     }
 
@@ -411,7 +405,6 @@ function App() {
     skipNextCloudSaveRef.current = true;
     setSession(null);
     setCloudState(createDefaultCloudState());
-    setSmsDraft("");
     setAiAdvice(null);
     setPassword("");
     setDeviceState((current) => ({
@@ -609,61 +602,6 @@ function App() {
     };
   }
 
-  async function handleAnalyzeSms() {
-    const trimmedSms = smsDraft.trim();
-    if (!trimmedSms) {
-      flashMessage("warning", "Paste a bank SMS before asking SmartBudget to analyze it.");
-      return;
-    }
-
-    setIsAnalyzingSms(true);
-
-    try {
-      const classification = await classifySmsTransaction(trimmedSms);
-      if (!classification?.isTransaction) {
-        flashMessage("warning", "SmartBudget could not confirm that message as a transaction alert.");
-        return;
-      }
-
-      const imported: Transaction = {
-        id: crypto.randomUUID(),
-        date: new Date().toISOString(),
-        merchant: classification.merchant || "Unknown Merchant",
-        amount: classification.amount,
-        currency: classification.currency,
-        category: classification.category,
-        kind: classification.kind,
-        rawSms: trimmedSms,
-        source: "sms",
-      };
-
-      let addedCount = 0;
-      setCloudState((current) => {
-        const merged = mergeTransactions(current.transactions, [imported]);
-        addedCount = merged.addedCount;
-        if (merged.addedCount === 0) {
-          return current;
-        }
-        return {
-          ...current,
-          transactions: merged.transactions,
-        };
-      });
-
-      if (addedCount === 0) {
-        flashMessage("neutral", "This SMS is already in your ledger.");
-        return;
-      }
-
-      setAiAdvice(null);
-      setDeviceState((current) => ({ ...current, activeScreen: "transactions" }));
-      flashMessage("success", `Imported ${imported.merchant} - ${formatMoney(imported.amount, imported.currency)} as ${imported.category}.`);
-      setSmsDraft("");
-    } finally {
-      setIsAnalyzingSms(false);
-    }
-  }
-
   function addManualTransaction(entry: ManualTransactionDraft) {
     const merchant = entry.merchant.trim();
     const amount = Number(entry.amount);
@@ -805,10 +743,7 @@ function App() {
         activeScreen={deviceState.activeScreen}
         summary={summary}
         transactions={cloudState.transactions}
-        allowDemoTools={session.mode === "demo"}
         isAndroidNative={isAndroidNative}
-        smsDraft={smsDraft}
-        setSmsDraft={setSmsDraft}
         goalProgress={goalProgress}
         safeSavings={safeSavings}
         protectedSavings={protectedSavings}
@@ -816,7 +751,6 @@ function App() {
         projection={projection}
         targetCurrency={cloudState.targetCurrency}
         smartSaveGoal={cloudState.smartSaveGoal}
-        isAnalyzingSms={isAnalyzingSms}
         isImportingNativeSms={isImportingNativeSms}
         isRefreshingAdvice={isRefreshingAdvice}
         adviceCards={adviceCards}
@@ -824,13 +758,11 @@ function App() {
         onSelectScreen={updateScreen}
         onSignOut={handleSignOut}
         onRefreshAdvice={refreshAdvice}
-        onAnalyzeSms={handleAnalyzeSms}
         onImportNativeSms={handleAllowSmsAccess}
         onAddManualTransaction={addManualTransaction}
         onDeleteTransaction={deleteTransaction}
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}
-        onFillSampleSms={setSmsDraft}
       />
       <Toast flash={flash} />
     </div>

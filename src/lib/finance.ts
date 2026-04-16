@@ -553,7 +553,7 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
       {
         type: "warning",
         title: "Import the first transaction",
-        description: "Paste a bank SMS or import messages from your phone so SmartBudget can build your ledger.",
+        description: "Enable Android SMS sync or add a manual debit or credit so SmartBudget can build your ledger.",
       },
       {
         type: "warning",

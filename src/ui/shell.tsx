@@ -17,10 +17,7 @@ export function AppShell({
   activeScreen,
   summary,
   transactions,
-  allowDemoTools,
   isAndroidNative,
-  smsDraft,
-  setSmsDraft,
   goalProgress,
   safeSavings,
   protectedSavings,
@@ -28,7 +25,6 @@ export function AppShell({
   projection,
   targetCurrency,
   smartSaveGoal,
-  isAnalyzingSms,
   isImportingNativeSms,
   isRefreshingAdvice,
   adviceCards,
@@ -36,22 +32,17 @@ export function AppShell({
   onSelectScreen,
   onSignOut,
   onRefreshAdvice,
-  onAnalyzeSms,
   onImportNativeSms,
   onAddManualTransaction,
   onDeleteTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
-  onFillSampleSms,
   }: {
   session: { email: string; name: string };
   activeScreen: ScreenKey;
   summary: FinancialSummary;
   transactions: Transaction[];
-  allowDemoTools: boolean;
   isAndroidNative: boolean;
-  smsDraft: string;
-  setSmsDraft: (value: string) => void;
   goalProgress: number;
   safeSavings: number;
   protectedSavings: number;
@@ -59,7 +50,6 @@ export function AppShell({
   projection: ReturnType<typeof projectSavings>;
   targetCurrency: CurrencyCode;
   smartSaveGoal: number;
-  isAnalyzingSms: boolean;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
   adviceCards: AdviceCard[];
@@ -67,13 +57,11 @@ export function AppShell({
   onSelectScreen: (screen: ScreenKey) => void;
   onSignOut: () => void;
   onRefreshAdvice: () => void;
-  onAnalyzeSms: () => void;
   onImportNativeSms: () => void;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
-  onFillSampleSms: (value: string) => void;
 }) {
   const categoryBreakdown = buildCategoryBreakdown(transactions);
   const monthlyTrend = buildMonthlyTrend(transactions, 6);
@@ -88,10 +76,7 @@ export function AppShell({
     yearlyTrend,
     weeklyTrend,
     transactions,
-    allowDemoTools,
     isAndroidNative,
-    smsDraft,
-    setSmsDraft,
     goalProgress,
     safeSavings,
     protectedSavings,
@@ -99,7 +84,6 @@ export function AppShell({
     projection,
     targetCurrency,
     smartSaveGoal,
-    isAnalyzingSms,
     isImportingNativeSms,
     isRefreshingAdvice,
     adviceCards,
@@ -109,8 +93,6 @@ export function AppShell({
     onAddManualTransaction,
     onUpdateGoal,
     onUpdateTargetCurrency,
-    onFillSampleSms,
-    onAnalyzeSms,
     onImportNativeSms,
     onRefreshAdvice,
   });
@@ -191,10 +173,7 @@ function renderScreen({
   yearlyTrend,
   weeklyTrend,
   transactions,
-  allowDemoTools,
   isAndroidNative,
-  smsDraft,
-  setSmsDraft,
   goalProgress,
   safeSavings,
   protectedSavings,
@@ -202,7 +181,6 @@ function renderScreen({
   projection,
   targetCurrency,
   smartSaveGoal,
-  isAnalyzingSms,
   isImportingNativeSms,
   isRefreshingAdvice,
   adviceCards,
@@ -212,8 +190,6 @@ function renderScreen({
   onAddManualTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
-  onFillSampleSms,
-  onAnalyzeSms,
   onImportNativeSms,
   onRefreshAdvice,
 }: {
@@ -224,10 +200,7 @@ function renderScreen({
   yearlyTrend: ReturnType<typeof buildMonthlyTrend>;
   weeklyTrend: ReturnType<typeof buildWeeklyTrend>;
   transactions: Transaction[];
-  allowDemoTools: boolean;
   isAndroidNative: boolean;
-  smsDraft: string;
-  setSmsDraft: (value: string) => void;
   goalProgress: number;
   safeSavings: number;
   protectedSavings: number;
@@ -235,7 +208,6 @@ function renderScreen({
   projection: ReturnType<typeof projectSavings>;
   targetCurrency: CurrencyCode;
   smartSaveGoal: number;
-  isAnalyzingSms: boolean;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
   adviceCards: AdviceCard[];
@@ -245,8 +217,6 @@ function renderScreen({
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
-  onFillSampleSms: (value: string) => void;
-  onAnalyzeSms: () => void;
   onImportNativeSms: () => void;
   onRefreshAdvice: () => void;
 }) {
@@ -258,17 +228,11 @@ function renderScreen({
           categoryBreakdown={categoryBreakdown}
           monthlyTrend={monthlyTrend}
           recentTransactions={transactions.slice(0, 6)}
-          allowDemoTools={allowDemoTools}
           insights={insights}
           isAndroidNative={isAndroidNative}
-          smsDraft={smsDraft}
-          setSmsDraft={setSmsDraft}
           goalProgress={goalProgress}
           safeSavings={safeSavings}
-          isAnalyzingSms={isAnalyzingSms}
           isImportingNativeSms={isImportingNativeSms}
-          onAnalyzeSms={onAnalyzeSms}
-          onFillSampleSms={onFillSampleSms}
           onImportNativeSms={onImportNativeSms}
           onSetScreen={onSelectScreen}
         />
@@ -277,16 +241,10 @@ function renderScreen({
       return (
         <TransactionsScreen
           transactions={transactions}
-          allowDemoTools={allowDemoTools}
-          smsDraft={smsDraft}
-          setSmsDraft={setSmsDraft}
-          isAnalyzingSms={isAnalyzingSms}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
           onAddManualTransaction={onAddManualTransaction}
           onDeleteTransaction={onDeleteTransaction}
-          onFillSampleSms={onFillSampleSms}
-          onAnalyzeSms={onAnalyzeSms}
           onImportNativeSms={onImportNativeSms}
           onSetScreen={onSelectScreen}
         />
