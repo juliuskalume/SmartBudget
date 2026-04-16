@@ -6,7 +6,6 @@ import {
   PiggyBank,
   ReceiptText,
   TrendingUp,
-  Wallet,
 } from "lucide-react";
 import type { AdviceCard, CurrencyCode, FinancialSummary, ManualTransactionDraft, ScreenKey, Transaction } from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
@@ -104,7 +103,7 @@ export function AppShell({
       <header className="phone-header">
         <div className="phone-brand phone-brand--screen">
           <div className="phone-brand__mark phone-brand__mark--ghost">
-            <Wallet size={18} />
+            <img className="phone-brand__logo" src="/smartbudgetlogo.png" alt="SmartBudget logo" />
           </div>
           <div className="phone-brand__text">
             <strong>{headerMeta.title}</strong>

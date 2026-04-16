@@ -773,7 +773,10 @@ function LoadingScreen() {
   return (
     <div className="auth-layout loading-layout">
       <Panel title="SmartBudget" subtitle="Syncing your cloud account" className="hero-panel auth-hero">
-        <div className="hero-badge">SmartBudget</div>
+        <div className="hero-badge">
+          <img className="hero-badge__logo" src="/smartbudgetlogo.png" alt="SmartBudget logo" />
+          SmartBudget
+        </div>
         <h1>Loading your saved budget.</h1>
         <p>Fetching your cloud account, then preparing the dashboard and native SMS flow.</p>
         <div className="hero-preview">

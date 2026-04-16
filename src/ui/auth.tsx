@@ -2,7 +2,6 @@ import type { FormEvent } from "react";
 import {
   BadgeDollarSign,
   CheckCircle2,
-  PiggyBank,
   ScanText,
   ShieldCheck,
   Sparkles,
@@ -40,7 +39,7 @@ export function AuthScreen({
     <div className="auth-layout">
       <Panel title="SmartBudget" subtitle="Cloud-synced student finance assistant" className="hero-panel auth-hero">
         <div className="hero-badge">
-          <PiggyBank size={16} />
+          <img className="hero-badge__logo" src="/smartbudgetlogo.png" alt="SmartBudget logo" />
           SmartBudget
         </div>
         <h1>Manage smart. Save smarter.</h1>

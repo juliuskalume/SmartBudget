@@ -2336,6 +2336,14 @@ h6 {
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
+.hero-badge__logo {
+  width: 1.6rem;
+  height: 1.6rem;
+  object-fit: contain;
+  border-radius: 0.35rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
 .hero-preview__card {
   border-radius: 20px;
 }
@@ -2517,6 +2525,13 @@ h6 {
     0 12px 20px rgba(255, 221, 0, 0.24),
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
     inset 0 -2px 0 rgba(122, 92, 0, 0.36);
+}
+
+.phone-brand__logo {
+  width: 1.7rem;
+  height: 1.7rem;
+  object-fit: contain;
+  border-radius: 0.35rem;
 }
 
 .phone-brand__mark--ghost,
