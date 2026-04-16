@@ -21,6 +21,7 @@ Create a `.env` file from `.env.example`:
 VITE_SUPABASE_URL="https://your-project.supabase.co"
 VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
 GROQ_API_KEY="your-groq-api-key"
+APP_URL="https://your-app.vercel.app"
 ```
 
 Run the local dev server:
@@ -73,6 +74,8 @@ npm run android:open
 ```
 
 The Android app includes native SMS inbox import. SMS content is read locally on the device after permission is granted, then parsed transactions are saved to the user's cloud account.
+
+The Android wrapper defaults to `https://hamid-smart-budget.vercel.app` and opens the hosted client URL instead of bundled `dist` assets. Set `APP_URL` only when you want to override that for staging or another deployment.
 
 ## Scripts
 
