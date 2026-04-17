@@ -1166,11 +1166,12 @@ export function AdviceScreen({
         ))}
       </section>
 
-      <Panel
-        title="Where SmartBudget Would Invest Next"
-        subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your protected balance."
-      >
-        <div className="stack">
+      <div style={{ order: 2 }}>
+        <Panel
+          title="Where SmartBudget Would Invest Next"
+          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your protected balance."
+        >
+          <div className="stack">
           <p className="helper-copy">
             {investableBalanceUsd > 0
               ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")}.`
@@ -1238,11 +1239,13 @@ export function AdviceScreen({
           {isLoadingMarketInsights ? <div className="auth-note auth-note--signup">Loading live market suggestions...</div> : null}
           {marketError ? <div className="auth-note auth-note--signup">{marketError}</div> : null}
           {investmentError ? <div className="auth-note auth-note--signup">{investmentError}</div> : null}
-        </div>
-      </Panel>
+          </div>
+        </Panel>
+      </div>
 
-      <Panel title="What If You Invested?" subtitle="See what your money would be worth today if it had been placed into the strongest performer in SmartBudget's current live market screen.">
-        <div className="stack">
+      <div style={{ order: 1 }}>
+        <Panel title="What If You Invested?" subtitle="See what your money would be worth today if it had been placed into the strongest performer in SmartBudget's current live market screen.">
+          <div className="stack">
           <div className="segment-switch segment-switch--wide">
             {[
               { key: "1m", label: "1 Month" },
@@ -1363,8 +1366,9 @@ export function AdviceScreen({
 
           {marketError ? <div className="auth-note auth-note--signup">{marketError}</div> : null}
           {whatIfError ? <div className="auth-note auth-note--signup">{whatIfError}</div> : null}
-        </div>
-      </Panel>
+          </div>
+        </Panel>
+      </div>
 
       <section className="dashboard-grid dashboard-grid--bottom">
         <Panel title="Behavior snapshot" subtitle="The three signals the model currently considers most important.">
