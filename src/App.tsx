@@ -638,13 +638,6 @@ function App() {
       return false;
     }
 
-    if (typeof window !== "undefined") {
-      const confirmed = window.confirm("Delete this SmartBudget account permanently? This removes your auth account and synced budget data.");
-      if (!confirmed) {
-        return false;
-      }
-    }
-
     setIsDeletingAccount(true);
 
     try {

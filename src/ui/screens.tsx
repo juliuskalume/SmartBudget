@@ -1294,7 +1294,7 @@ export function ProfileScreen({
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
-  onSignOut: () => void;
+  onSignOut: () => Promise<void>;
   onDeleteAccount: () => Promise<boolean>;
 }) {
   const [nameInput, setNameInput] = useState(session.name);
@@ -1302,6 +1302,8 @@ export function ProfileScreen({
   const [avatarUrlInput, setAvatarUrlInput] = useState(session.avatarUrl ?? "");
   const [passwordInput, setPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
+  const [confirmAction, setConfirmAction] = useState<"signout" | "delete" | null>(null);
+  const [isConfirmingAction, setIsConfirmingAction] = useState(false);
   const initials = session.name.trim().charAt(0).toUpperCase() || "U";
   const canManageAuth = session.mode === "cloud";
 
@@ -1331,9 +1333,48 @@ export function ProfileScreen({
     }
   }
 
+  async function handleConfirmAction() {
+    if (!confirmAction) {
+      return;
+    }
+
+    setIsConfirmingAction(true);
+
+    try {
+      if (confirmAction === "signout") {
+        await onSignOut();
+        setConfirmAction(null);
+        return;
+      }
+
+      const deleted = await onDeleteAccount();
+      if (deleted) {
+        setConfirmAction(null);
+      }
+    } finally {
+      setIsConfirmingAction(false);
+    }
+  }
+
+  const confirmCopy =
+    confirmAction === "delete"
+      ? {
+          title: "Delete account?",
+          description: "This permanently removes your SmartBudget account and synced budget data. This action cannot be undone.",
+          buttonLabel: isDeletingAccount || isConfirmingAction ? "Deleting..." : "Delete account",
+          toneClassName: "profile-confirm__button--danger",
+        }
+      : {
+          title: "Log out?",
+          description: "You will be signed out of SmartBudget on this device and will need to log in again to continue.",
+          buttonLabel: isConfirmingAction ? "Logging out..." : "Log out",
+          toneClassName: "",
+        };
+
   return (
-    <div className="screen-stack">
-      <section className="hero-strip panel profile-hero">
+    <>
+      <div className="screen-stack">
+        <section className="hero-strip panel profile-hero">
         <div className="profile-hero__identity">
           <div className="profile-avatar">
             <span className="profile-avatar__initials">{initials}</span>
@@ -1365,169 +1406,200 @@ export function ProfileScreen({
             </div>
           </div>
         </div>
-      </section>
+        </section>
 
-      <Panel title="Profile details" subtitle="Update the public account details used across the app.">
-        <div className="stack">
-          <div className="profile-grid">
-            <label className="field">
-              <span>Name</span>
-              <input className="input" type="text" value={nameInput} onChange={(event) => setNameInput(event.target.value)} />
-            </label>
+        <Panel title="Profile details" subtitle="Update the public account details used across the app.">
+          <div className="stack">
+            <div className="profile-grid">
+              <label className="field">
+                <span>Name</span>
+                <input className="input" type="text" value={nameInput} onChange={(event) => setNameInput(event.target.value)} />
+              </label>
 
-            <label className="field">
-              <span>Email</span>
-              <input className="input" type="email" value={emailInput} onChange={(event) => setEmailInput(event.target.value)} />
-            </label>
-          </div>
-
-          <label className="field">
-            <span>Profile picture URL</span>
-            <div className="field-with-icon">
-              <Image size={16} />
-              <input
-                className="input"
-                type="url"
-                value={avatarUrlInput}
-                onChange={(event) => setAvatarUrlInput(event.target.value)}
-                placeholder="https://..."
-              />
+              <label className="field">
+                <span>Email</span>
+                <input className="input" type="email" value={emailInput} onChange={(event) => setEmailInput(event.target.value)} />
+              </label>
             </div>
-          </label>
 
-          <div className="button-row button-row--tight">
-            <button
-              className="button button--primary"
-              type="button"
-              onClick={() => void onSaveProfileDetails({ name: nameInput, email: emailInput, avatarUrl: avatarUrlInput })}
-              disabled={isSavingProfile}
-            >
-              <UserRound size={16} />
-              {isSavingProfile ? "Saving..." : "Save profile"}
-            </button>
-          </div>
-
-          <p className="helper-copy">
-            {canManageAuth
-              ? "Email updates may require confirmation through Supabase before they fully take effect."
-              : "Demo mode keeps these profile changes on this device only."}
-          </p>
-        </div>
-      </Panel>
-
-      <Panel title="Security" subtitle="Change the password for this SmartBudget account.">
-        <div className="stack">
-          <div className="profile-grid">
             <label className="field">
-              <span>New password</span>
+              <span>Profile picture URL</span>
               <div className="field-with-icon">
-                <KeyRound size={16} />
+                <Image size={16} />
                 <input
                   className="input"
-                  type="password"
-                  value={passwordInput}
-                  onChange={(event) => setPasswordInput(event.target.value)}
-                  placeholder="At least 8 characters"
-                  disabled={!canManageAuth || isUpdatingPassword}
+                  type="url"
+                  value={avatarUrlInput}
+                  onChange={(event) => setAvatarUrlInput(event.target.value)}
+                  placeholder="https://..."
                 />
               </div>
             </label>
 
-            <label className="field">
-              <span>Confirm new password</span>
-              <div className="field-with-icon">
+            <div className="button-row button-row--tight">
+              <button
+                className="button button--primary"
+                type="button"
+                onClick={() => void onSaveProfileDetails({ name: nameInput, email: emailInput, avatarUrl: avatarUrlInput })}
+                disabled={isSavingProfile}
+              >
+                <UserRound size={16} />
+                {isSavingProfile ? "Saving..." : "Save profile"}
+              </button>
+            </div>
+
+            <p className="helper-copy">
+              {canManageAuth
+                ? "Email updates may require confirmation through Supabase before they fully take effect."
+                : "Demo mode keeps these profile changes on this device only."}
+            </p>
+          </div>
+        </Panel>
+
+        <Panel title="Security" subtitle="Change the password for this SmartBudget account.">
+          <div className="stack">
+            <div className="profile-grid">
+              <label className="field">
+                <span>New password</span>
+                <div className="field-with-icon">
+                  <KeyRound size={16} />
+                  <input
+                    className="input"
+                    type="password"
+                    value={passwordInput}
+                    onChange={(event) => setPasswordInput(event.target.value)}
+                    placeholder="At least 8 characters"
+                    disabled={!canManageAuth || isUpdatingPassword}
+                  />
+                </div>
+              </label>
+
+              <label className="field">
+                <span>Confirm new password</span>
+                <div className="field-with-icon">
+                  <KeyRound size={16} />
+                  <input
+                    className="input"
+                    type="password"
+                    value={confirmPasswordInput}
+                    onChange={(event) => setConfirmPasswordInput(event.target.value)}
+                    placeholder="Repeat the new password"
+                    disabled={!canManageAuth || isUpdatingPassword}
+                  />
+                </div>
+              </label>
+            </div>
+
+            <div className="button-row button-row--tight">
+              <button
+                className="button button--secondary"
+                type="button"
+                onClick={() => void handlePasswordSave()}
+                disabled={!canManageAuth || isUpdatingPassword || !passwordInput.trim() || passwordInput !== confirmPasswordInput}
+              >
                 <KeyRound size={16} />
-                <input
-                  className="input"
-                  type="password"
-                  value={confirmPasswordInput}
-                  onChange={(event) => setConfirmPasswordInput(event.target.value)}
-                  placeholder="Repeat the new password"
-                  disabled={!canManageAuth || isUpdatingPassword}
-                />
-              </div>
-            </label>
-          </div>
+                {isUpdatingPassword ? "Updating..." : "Update password"}
+              </button>
+            </div>
 
-          <div className="button-row button-row--tight">
-            <button
-              className="button button--secondary"
-              type="button"
-              onClick={() => void handlePasswordSave()}
-              disabled={!canManageAuth || isUpdatingPassword || !passwordInput.trim() || passwordInput !== confirmPasswordInput}
-            >
-              <KeyRound size={16} />
-              {isUpdatingPassword ? "Updating..." : "Update password"}
-            </button>
+            <p className="helper-copy">
+              {canManageAuth
+                ? "Use a new password you have not used elsewhere."
+                : "Password changes are disabled in demo mode because there is no real account behind it."}
+            </p>
           </div>
+        </Panel>
 
-          <p className="helper-copy">
-            {canManageAuth
-              ? "Use a new password you have not used elsewhere."
-              : "Password changes are disabled in demo mode because there is no real account behind it."}
-          </p>
+        <section className="dashboard-grid dashboard-grid--bottom">
+          <Panel title="Support and sharing" subtitle="Reach the team or invite someone else into the app.">
+            <div className="profile-action-list">
+              <button className="profile-action-button" type="button" onClick={() => onOpenSupportComposer("support")}>
+                <Mail size={16} />
+                <div>
+                  <strong>Contact support</strong>
+                  <span>Open your email client to contact sentira.official@gmail.com.</span>
+                </div>
+              </button>
+              <button className="profile-action-button" type="button" onClick={() => onOpenSupportComposer("bug")}>
+                <Bug size={16} />
+                <div>
+                  <strong>Report a bug</strong>
+                  <span>Starts an email with the subject line SmartBudget Bug Report.</span>
+                </div>
+              </button>
+              <button className="profile-action-button" type="button" onClick={() => onOpenSupportComposer("feature")}>
+                <Lightbulb size={16} />
+                <div>
+                  <strong>Suggest a feature</strong>
+                  <span>Starts an email with the subject line SmartBudget Feature Suggestion.</span>
+                </div>
+              </button>
+              <button className="profile-action-button" type="button" onClick={() => void onShareApp()}>
+                <Share2 size={16} />
+                <div>
+                  <strong>Share SmartBudget</strong>
+                  <span>Opens the device share sheet with the SmartBudget invite message.</span>
+                </div>
+              </button>
+            </div>
+          </Panel>
+
+          <Panel title="Account actions" subtitle="Leave the session or permanently delete the account.">
+            <div className="profile-action-list">
+              <button className="profile-action-button" type="button" onClick={() => setConfirmAction("signout")}>
+                <LogOut size={16} />
+                <div>
+                  <strong>Log out</strong>
+                  <span>Sign out of SmartBudget on this device.</span>
+                </div>
+              </button>
+              <button
+                className="profile-action-button profile-action-button--danger"
+                type="button"
+                onClick={() => setConfirmAction("delete")}
+                disabled={!canManageAuth || isDeletingAccount || isConfirmingAction}
+              >
+                <Trash2 size={16} />
+                <div>
+                  <strong>{isDeletingAccount ? "Deleting account..." : "Delete account"}</strong>
+                  <span>Permanently remove your auth account and synced budget data.</span>
+                </div>
+              </button>
+            </div>
+          </Panel>
+        </section>
+      </div>
+
+      {confirmAction ? (
+        <div className="profile-confirm-overlay" role="presentation" onClick={() => !isConfirmingAction && setConfirmAction(null)}>
+          <div
+            className="profile-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-confirm-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="profile-confirm-dialog__header">
+              <strong id="profile-confirm-title">{confirmCopy.title}</strong>
+              <p>{confirmCopy.description}</p>
+            </div>
+            <div className="profile-confirm-dialog__actions">
+              <button className="button button--ghost" type="button" onClick={() => setConfirmAction(null)} disabled={isConfirmingAction}>
+                Cancel
+              </button>
+              <button
+                className={`button button--primary ${confirmCopy.toneClassName}`.trim()}
+                type="button"
+                onClick={() => void handleConfirmAction()}
+                disabled={isConfirmingAction}
+              >
+                {confirmCopy.buttonLabel}
+              </button>
+            </div>
+          </div>
         </div>
-      </Panel>
-
-      <section className="dashboard-grid dashboard-grid--bottom">
-        <Panel title="Support and sharing" subtitle="Reach the team or invite someone else into the app.">
-          <div className="profile-action-list">
-            <button className="profile-action-button" type="button" onClick={() => onOpenSupportComposer("support")}>
-              <Mail size={16} />
-              <div>
-                <strong>Contact support</strong>
-                <span>Open your email client to contact sentira.official@gmail.com.</span>
-              </div>
-            </button>
-            <button className="profile-action-button" type="button" onClick={() => onOpenSupportComposer("bug")}>
-              <Bug size={16} />
-              <div>
-                <strong>Report a bug</strong>
-                <span>Starts an email with the subject line SmartBudget Bug Report.</span>
-              </div>
-            </button>
-            <button className="profile-action-button" type="button" onClick={() => onOpenSupportComposer("feature")}>
-              <Lightbulb size={16} />
-              <div>
-                <strong>Suggest a feature</strong>
-                <span>Starts an email with the subject line SmartBudget Feature Suggestion.</span>
-              </div>
-            </button>
-            <button className="profile-action-button" type="button" onClick={() => void onShareApp()}>
-              <Share2 size={16} />
-              <div>
-                <strong>Share SmartBudget</strong>
-                <span>Opens the device share sheet with the SmartBudget invite message.</span>
-              </div>
-            </button>
-          </div>
-        </Panel>
-
-        <Panel title="Account actions" subtitle="Leave the session or permanently delete the account.">
-          <div className="profile-action-list">
-            <button className="profile-action-button" type="button" onClick={onSignOut}>
-              <LogOut size={16} />
-              <div>
-                <strong>Log out</strong>
-                <span>Sign out of SmartBudget on this device.</span>
-              </div>
-            </button>
-            <button
-              className="profile-action-button profile-action-button--danger"
-              type="button"
-              onClick={() => void onDeleteAccount()}
-              disabled={!canManageAuth || isDeletingAccount}
-            >
-              <Trash2 size={16} />
-              <div>
-                <strong>{isDeletingAccount ? "Deleting account..." : "Delete account"}</strong>
-                <span>Permanently remove your auth account and synced budget data.</span>
-              </div>
-            </button>
-          </div>
-        </Panel>
-      </section>
-    </div>
+      ) : null}
+    </>
   );
 }
 

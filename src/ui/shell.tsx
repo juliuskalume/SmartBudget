@@ -66,7 +66,7 @@ export function AppShell({
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
-  onSignOut: () => void;
+  onSignOut: () => Promise<void>;
   onRefreshAdvice: () => void;
   onImportNativeSms: () => void;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
@@ -268,7 +268,7 @@ function renderScreen({
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
-  onSignOut: () => void;
+  onSignOut: () => Promise<void>;
   onDeleteAccount: () => Promise<boolean>;
 }) {
   switch (activeScreen) {
