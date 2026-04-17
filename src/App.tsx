@@ -67,7 +67,7 @@ function App() {
   const [cloudState, setCloudState] = useState<CloudState>(() => createDefaultCloudState());
   const [session, setSession] = useState<Session | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("student@smartbudget.app");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [flash, setFlash] = useState<Flash | null>(null);
   const [aiAdvice, setAiAdvice] = useState<AdviceCard[] | null>(null);
