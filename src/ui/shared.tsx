@@ -48,6 +48,11 @@ export const SCREEN_COPY: Record<ScreenKey, { eyebrow: string; title: string; su
     title: "Smart recommendations",
     subtitle: "Turn the current cash flow picture into concrete next actions.",
   },
+  profile: {
+    eyebrow: "Account",
+    title: "Profile and support",
+    subtitle: "Manage identity, security, sharing, and support actions from one place.",
+  },
 };
 
 export function Panel({

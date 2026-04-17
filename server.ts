@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { categorizeSmsText, generateAdviceCards } from "./server/ai";
+import { deleteAuthenticatedAccount } from "./server/account";
 import { buildWhatIfScenario } from "./server/markets";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,6 +56,17 @@ async function startServer() {
     } catch (error) {
       console.error("Market what-if error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Unable to build market scenario" });
+    }
+  });
+
+  app.post("/api/account/delete", async (req, res) => {
+    try {
+      const authorization = typeof req.headers.authorization === "string" ? req.headers.authorization : "";
+      await deleteAuthenticatedAccount(authorization);
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Account deletion error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Unable to delete account" });
     }
   });
 

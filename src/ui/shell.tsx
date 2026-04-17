@@ -1,15 +1,15 @@
-import type { ComponentType, ReactNode } from "react";
-import {
-  Bell,
-  Home,
-  Lightbulb,
-  PiggyBank,
-  ReceiptText,
-  TrendingUp,
-} from "lucide-react";
+import type { ComponentType } from "react";
+import { Home, Lightbulb, PiggyBank, ReceiptText, TrendingUp } from "lucide-react";
 import type { AdviceCard, CurrencyCode, FinancialSummary, ManualTransactionDraft, ScreenKey, Transaction } from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
-import { AdviceScreen, AnalysisScreen, DashboardScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
+import { AdviceScreen, AnalysisScreen, DashboardScreen, ProfileScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
+
+type AppSessionView = {
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  mode: "cloud" | "demo";
+};
 
 export function AppShell({
   session,
@@ -26,6 +26,9 @@ export function AppShell({
   smartSaveGoal,
   isImportingNativeSms,
   isRefreshingAdvice,
+  isSavingProfile,
+  isUpdatingPassword,
+  isDeletingAccount,
   adviceCards,
   insights,
   onSelectScreen,
@@ -37,8 +40,13 @@ export function AppShell({
   onDeleteTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
-  }: {
-  session: { email: string; name: string };
+  onSaveProfileDetails,
+  onUpdatePassword,
+  onOpenSupportComposer,
+  onShareApp,
+  onDeleteAccount,
+}: {
+  session: AppSessionView;
   activeScreen: ScreenKey;
   summary: FinancialSummary;
   transactions: Transaction[];
@@ -52,6 +60,9 @@ export function AppShell({
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
+  isSavingProfile: boolean;
+  isUpdatingPassword: boolean;
+  isDeletingAccount: boolean;
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
@@ -63,6 +74,11 @@ export function AppShell({
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
+  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string }) => Promise<boolean>;
+  onUpdatePassword: (nextPassword: string) => Promise<boolean>;
+  onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
+  onShareApp: () => Promise<boolean>;
+  onDeleteAccount: () => Promise<boolean>;
 }) {
   const categoryBreakdown = buildCategoryBreakdown(transactions);
   const monthlyTrend = buildMonthlyTrend(transactions, 6);
@@ -70,6 +86,7 @@ export function AppShell({
   const weeklyTrend = buildWeeklyTrend(transactions, 8);
   const headerMeta = getHeaderMeta(activeScreen);
   const screen = renderScreen({
+    session,
     activeScreen,
     summary,
     categoryBreakdown,
@@ -87,6 +104,9 @@ export function AppShell({
     smartSaveGoal,
     isImportingNativeSms,
     isRefreshingAdvice,
+    isSavingProfile,
+    isUpdatingPassword,
+    isDeletingAccount,
     adviceCards,
     insights,
     onSelectScreen,
@@ -97,6 +117,12 @@ export function AppShell({
     onUpdateTargetCurrency,
     onImportNativeSms,
     onRefreshAdvice,
+    onSaveProfileDetails,
+    onUpdatePassword,
+    onOpenSupportComposer,
+    onShareApp,
+    onSignOut,
+    onDeleteAccount,
   });
 
   const initials = session.name.trim().charAt(0).toUpperCase() || "U";
@@ -115,16 +141,22 @@ export function AppShell({
         </div>
 
         <div className="phone-header__actions">
-          <button
-            className="icon-button icon-button--soft"
-            type="button"
-            onClick={() => onSelectScreen("advice")}
-            aria-label="Open notifications"
-          >
-            <Bell size={18} />
-          </button>
-          <button className="avatar-button" type="button" onClick={onSignOut} aria-label="User profile and sign out">
-            {initials}
+          <span className="phone-header__user-name" title={session.name}>
+            {session.name}
+          </span>
+          <button className="avatar-button" type="button" onClick={() => onSelectScreen("profile")} aria-label="Open profile">
+            <span className="avatar-button__initials">{initials}</span>
+            {session.avatarUrl ? (
+              <img
+                key={session.avatarUrl}
+                className="avatar-button__image"
+                src={session.avatarUrl}
+                alt={`${session.name} profile`}
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                }}
+              />
+            ) : null}
           </button>
         </div>
       </header>
@@ -156,18 +188,14 @@ function NavItem({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={`phone-nav__item ${active ? "phone-nav__item--active" : ""}`}
-      onClick={onClick}
-      aria-label={label}
-    >
+    <button type="button" className={`phone-nav__item ${active ? "phone-nav__item--active" : ""}`} onClick={onClick} aria-label={label}>
       <Icon size={24} className="phone-nav__icon" />
     </button>
   );
 }
 
 function renderScreen({
+  session,
   activeScreen,
   summary,
   categoryBreakdown,
@@ -185,6 +213,9 @@ function renderScreen({
   smartSaveGoal,
   isImportingNativeSms,
   isRefreshingAdvice,
+  isSavingProfile,
+  isUpdatingPassword,
+  isDeletingAccount,
   adviceCards,
   insights,
   onSelectScreen,
@@ -195,7 +226,14 @@ function renderScreen({
   onUpdateTargetCurrency,
   onImportNativeSms,
   onRefreshAdvice,
+  onSaveProfileDetails,
+  onUpdatePassword,
+  onOpenSupportComposer,
+  onShareApp,
+  onSignOut,
+  onDeleteAccount,
 }: {
+  session: AppSessionView;
   activeScreen: ScreenKey;
   summary: FinancialSummary;
   categoryBreakdown: ReturnType<typeof buildCategoryBreakdown>;
@@ -213,6 +251,9 @@ function renderScreen({
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
+  isSavingProfile: boolean;
+  isUpdatingPassword: boolean;
+  isDeletingAccount: boolean;
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
@@ -223,6 +264,12 @@ function renderScreen({
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onImportNativeSms: () => void;
   onRefreshAdvice: () => void;
+  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string }) => Promise<boolean>;
+  onUpdatePassword: (nextPassword: string) => Promise<boolean>;
+  onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
+  onShareApp: () => Promise<boolean>;
+  onSignOut: () => void;
+  onDeleteAccount: () => Promise<boolean>;
 }) {
   switch (activeScreen) {
     case "dashboard":
@@ -292,6 +339,21 @@ function renderScreen({
           onRefreshAdvice={onRefreshAdvice}
         />
       );
+    case "profile":
+      return (
+        <ProfileScreen
+          session={session}
+          isSavingProfile={isSavingProfile}
+          isUpdatingPassword={isUpdatingPassword}
+          isDeletingAccount={isDeletingAccount}
+          onSaveProfileDetails={onSaveProfileDetails}
+          onUpdatePassword={onUpdatePassword}
+          onOpenSupportComposer={onOpenSupportComposer}
+          onShareApp={onShareApp}
+          onSignOut={onSignOut}
+          onDeleteAccount={onDeleteAccount}
+        />
+      );
     default:
       return null;
   }
@@ -325,6 +387,11 @@ function getHeaderMeta(activeScreen: ScreenKey) {
       return {
         title: "AI Coach",
         subtitle: "Actionable recommendations for your next move",
+      };
+    case "profile":
+      return {
+        title: "Profile",
+        subtitle: "Account settings, support, and sharing",
       };
     default:
       return {

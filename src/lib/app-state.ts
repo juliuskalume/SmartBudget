@@ -81,7 +81,14 @@ export function normalizeCloudState(value: unknown): CloudState {
 }
 
 export function isScreenKey(value: unknown): value is ScreenKey {
-  return value === "dashboard" || value === "transactions" || value === "analysis" || value === "save" || value === "advice";
+  return (
+    value === "dashboard" ||
+    value === "transactions" ||
+    value === "analysis" ||
+    value === "save" ||
+    value === "advice" ||
+    value === "profile"
+  );
 }
 
 export function normalizeTransactionSource(transaction: Transaction): Transaction {

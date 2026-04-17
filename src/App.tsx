@@ -41,6 +41,7 @@ type Session = {
   userId: string;
   email: string;
   name: string;
+  avatarUrl: string | null;
   mode: "cloud" | "demo";
 };
 
@@ -58,6 +59,9 @@ type SmsClassification = {
   currency: CurrencyCode;
 };
 
+const SUPPORT_EMAIL = "sentira.official@gmail.com";
+const APP_SHARE_MESSAGE = "Hey, I use SmartBudget to auto track and manage my finances. You can try it too at https://hamid-smart-budget.vercel.app";
+
 function App() {
   const [deviceState, setDeviceState] = useState<DeviceState>(() => loadDeviceState());
   const [cloudState, setCloudState] = useState<CloudState>(() => createDefaultCloudState());
@@ -70,6 +74,9 @@ function App() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(Boolean(isSupabaseConfigured));
   const isAndroidNative = isAndroidNativePlatform();
   const appliedCloudUserIdRef = useRef<string | null>(null);
@@ -261,6 +268,20 @@ function App() {
     setFlash({ type, message });
   }
 
+  function clearSessionState() {
+    appliedCloudUserIdRef.current = null;
+    isHydratingCloudRef.current = false;
+    skipNextCloudSaveRef.current = true;
+    setSession(null);
+    setCloudState(createDefaultCloudState());
+    setAiAdvice(null);
+    setPassword("");
+    setDeviceState((current) => ({
+      ...current,
+      activeScreen: "dashboard",
+    }));
+  }
+
   function loadDemoData() {
     const demoCloudState: CloudState = {
       transactions: cloneDemoTransactions(),
@@ -400,17 +421,7 @@ function App() {
       return;
     }
 
-    appliedCloudUserIdRef.current = null;
-    isHydratingCloudRef.current = false;
-    skipNextCloudSaveRef.current = true;
-    setSession(null);
-    setCloudState(createDefaultCloudState());
-    setAiAdvice(null);
-    setPassword("");
-    setDeviceState((current) => ({
-      ...current,
-      activeScreen: "dashboard",
-    }));
+    clearSessionState();
     flashMessage("neutral", "Signed out of SmartBudget.");
   }
 
@@ -424,6 +435,250 @@ function App() {
 
   function updateTargetCurrency(value: CurrencyCode) {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
+  }
+
+  async function saveProfileDetails(input: { name: string; email: string; avatarUrl: string }) {
+    if (!session) {
+      return false;
+    }
+
+    const nextName = input.name.trim();
+    const nextEmail = input.email.trim().toLowerCase();
+    const nextAvatarUrl = input.avatarUrl.trim();
+    const normalizedAvatarUrl = nextAvatarUrl || null;
+
+    if (!nextName) {
+      flashMessage("warning", "Name cannot be empty.");
+      return false;
+    }
+
+    if (!nextEmail || !nextEmail.includes("@")) {
+      flashMessage("warning", "Enter a valid email address.");
+      return false;
+    }
+
+    if (session.mode === "demo") {
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              name: nextName,
+              email: nextEmail,
+              avatarUrl: normalizedAvatarUrl,
+            }
+          : current,
+      );
+      setEmail(nextEmail);
+      flashMessage("success", "Profile updated in demo mode.");
+      return true;
+    }
+
+    if (!supabase) {
+      flashMessage("error", "Supabase is required before profile changes can be saved.");
+      return false;
+    }
+
+    const emailChanged = nextEmail !== session.email;
+    const nameChanged = nextName !== session.name;
+    const avatarChanged = normalizedAvatarUrl !== session.avatarUrl;
+
+    if (!emailChanged && !nameChanged && !avatarChanged) {
+      flashMessage("neutral", "No profile changes to save.");
+      return true;
+    }
+
+    setIsSavingProfile(true);
+
+    try {
+      const payload: {
+        email?: string;
+        data?: {
+          name: string;
+          avatar_url: string | null;
+        };
+      } = {};
+
+      if (emailChanged) {
+        payload.email = nextEmail;
+      }
+
+      if (nameChanged || avatarChanged) {
+        payload.data = {
+          name: nextName,
+          avatar_url: normalizedAvatarUrl,
+        };
+      }
+
+      const { data, error } = await supabase.auth.updateUser(payload);
+      if (error) {
+        throw error;
+      }
+
+      const updatedName = readMetadataName(data.user?.user_metadata, nextName);
+      const updatedAvatarUrl = readMetadataAvatarUrl(data.user?.user_metadata, normalizedAvatarUrl);
+      const updatedEmail = data.user?.email?.trim().toLowerCase() || nextEmail;
+
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              name: updatedName,
+              email: updatedEmail,
+              avatarUrl: updatedAvatarUrl,
+            }
+          : current,
+      );
+      setEmail(updatedEmail);
+      flashMessage(
+        "success",
+        emailChanged
+          ? "Profile updated. Check your email if Supabase asks you to confirm the address change."
+          : "Profile updated.",
+      );
+      return true;
+    } catch (error) {
+      flashMessage("error", error instanceof Error ? error.message : "Unable to save your profile.");
+      return false;
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
+  async function updatePassword(nextPassword: string) {
+    const trimmedPassword = nextPassword.trim();
+
+    if (session?.mode !== "cloud" || !supabase) {
+      flashMessage("warning", "Password changes are only available for real cloud accounts.");
+      return false;
+    }
+
+    if (trimmedPassword.length < 8) {
+      flashMessage("warning", "Use at least 8 characters for the new password.");
+      return false;
+    }
+
+    setIsUpdatingPassword(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: trimmedPassword });
+      if (error) {
+        throw error;
+      }
+
+      flashMessage("success", "Password updated.");
+      return true;
+    } catch (error) {
+      flashMessage("error", error instanceof Error ? error.message : "Unable to update the password.");
+      return false;
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  }
+
+  function openSupportComposer(type: "support" | "bug" | "feature") {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const subject =
+      type === "support"
+        ? "SmartBudget Support"
+        : type === "bug"
+          ? "SmartBudget Bug Report"
+          : "SmartBudget Feature Suggestion";
+    const body =
+      type === "support"
+        ? `Hi SmartBudget support,\n\nName: ${session?.name ?? ""}\nEmail: ${session?.email ?? ""}\n\nHow can you help?`
+        : `Hi SmartBudget team,\n\nName: ${session?.name ?? ""}\nEmail: ${session?.email ?? ""}\n\n${
+            type === "bug" ? "What happened?" : "What feature would you like to see?"
+          }`;
+
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
+  async function shareApp() {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    try {
+      if (typeof navigator.share === "function") {
+        await navigator.share({
+          title: "SmartBudget",
+          text: APP_SHARE_MESSAGE,
+        });
+        return true;
+      }
+
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(APP_SHARE_MESSAGE);
+        flashMessage("neutral", "Share text copied. Paste it into WhatsApp, Messages, Telegram, or another app.");
+        return true;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return false;
+      }
+
+      flashMessage("error", error instanceof Error ? error.message : "Unable to open the share sheet.");
+      return false;
+    }
+
+    flashMessage("warning", "Sharing is not supported on this device.");
+    return false;
+  }
+
+  async function deleteAccount() {
+    if (!session) {
+      return false;
+    }
+
+    if (session.mode !== "cloud" || !supabase) {
+      flashMessage("warning", "Account deletion is only available for real cloud accounts.");
+      return false;
+    }
+
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm("Delete this SmartBudget account permanently? This removes your auth account and synced budget data.");
+      if (!confirmed) {
+        return false;
+      }
+    }
+
+    setIsDeletingAccount(true);
+
+    try {
+      const {
+        data: { session: authSession },
+      } = await supabase.auth.getSession();
+      const accessToken = authSession?.access_token?.trim();
+
+      if (!accessToken) {
+        throw new Error("Your session expired. Sign in again before deleting the account.");
+      }
+
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to delete your account.");
+      }
+
+      await supabase.auth.signOut();
+      clearSessionState();
+      flashMessage("neutral", "Your SmartBudget account has been deleted.");
+      return true;
+    } catch (error) {
+      flashMessage("error", error instanceof Error ? error.message : "Unable to delete your account.");
+      return false;
+    } finally {
+      setIsDeletingAccount(false);
+    }
   }
 
   async function classifySmsTransaction(rawSms: string): Promise<SmsClassification | null> {
@@ -809,6 +1064,9 @@ function App() {
         smartSaveGoal={cloudState.smartSaveGoal}
         isImportingNativeSms={isImportingNativeSms}
         isRefreshingAdvice={isRefreshingAdvice}
+        isSavingProfile={isSavingProfile}
+        isUpdatingPassword={isUpdatingPassword}
+        isDeletingAccount={isDeletingAccount}
         adviceCards={adviceCards}
         insights={insights}
         onSelectScreen={updateScreen}
@@ -820,6 +1078,11 @@ function App() {
         onDeleteTransaction={deleteTransaction}
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}
+        onSaveProfileDetails={saveProfileDetails}
+        onUpdatePassword={updatePassword}
+        onOpenSupportComposer={openSupportComposer}
+        onShareApp={shareApp}
+        onDeleteAccount={deleteAccount}
       />
       <Toast flash={flash} />
     </div>
@@ -860,18 +1123,20 @@ function buildDemoSession(email: string): Session {
     userId: "demo",
     email,
     name: "Demo User",
+    avatarUrl: null,
     mode: "demo",
   };
 }
 
 function buildSessionFromSupabase(session: SupabaseSession): Session {
   const email = session.user.email?.trim().toLowerCase() || "student@smartbudget.app";
-  const metadataName = typeof session.user.user_metadata?.name === "string" ? session.user.user_metadata.name.trim() : "";
+  const metadataName = readMetadataName(session.user.user_metadata);
 
   return {
     userId: session.user.id,
     email,
     name: metadataName || displayNameFromEmail(email),
+    avatarUrl: readMetadataAvatarUrl(session.user.user_metadata),
     mode: "cloud",
   };
 }
@@ -884,6 +1149,18 @@ function displayNameFromEmail(email: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   return name || "SmartBudget User";
+}
+
+function readMetadataName(metadata: unknown, fallback = "") {
+  return typeof (metadata as { name?: unknown } | null)?.name === "string"
+    ? (metadata as { name: string }).name.trim() || fallback
+    : fallback;
+}
+
+function readMetadataAvatarUrl(metadata: unknown, fallback: string | null = null) {
+  return typeof (metadata as { avatar_url?: unknown } | null)?.avatar_url === "string"
+    ? (metadata as { avatar_url: string }).avatar_url.trim() || fallback
+    : fallback;
 }
 
 function getAuthRedirectUrl() {

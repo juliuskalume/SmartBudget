@@ -15,7 +15,8 @@ export type ScreenKey =
   | "transactions"
   | "analysis"
   | "save"
-  | "advice";
+  | "advice"
+  | "profile";
 
 export interface Transaction {
   id: string;
