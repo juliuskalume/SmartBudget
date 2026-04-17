@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { categorizeSmsText, generateAdviceCards } from "./server/ai.js";
 import { deleteAuthenticatedAccount } from "./server/account.js";
-import { buildWhatIfScenario } from "./server/markets.js";
+import { buildInvestmentRecommendations, buildWhatIfScenario } from "./server/markets.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +56,26 @@ async function startServer() {
     } catch (error) {
       console.error("Market what-if error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Unable to build market scenario" });
+    }
+  });
+
+  app.post("/api/markets/recommendations", async (req, res) => {
+    try {
+      const amount = Number(req.body?.amount);
+      const summary = req.body?.summary ?? {};
+      const result = await buildInvestmentRecommendations({
+        amount,
+        summary: {
+          healthScore: Number(summary.healthScore) || 0,
+          savingsRate: Number(summary.savingsRate) || 0,
+          cashFlow: Number(summary.cashFlow) || 0,
+          netWorth: Number(summary.netWorth) || 0,
+        },
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Market recommendations error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Unable to build investment suggestions" });
     }
   });
 

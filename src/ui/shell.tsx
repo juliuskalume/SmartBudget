@@ -334,6 +334,7 @@ function renderScreen({
           adviceCards={adviceCards}
           insights={insights}
           defaultWhatIfAmountUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD") : 100}
+          investableBalanceUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD") : 0}
           isBackedBySavings={protectedSavings > 0}
           isRefreshingAdvice={isRefreshingAdvice}
           onRefreshAdvice={onRefreshAdvice}

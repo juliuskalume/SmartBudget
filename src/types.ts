@@ -73,6 +73,42 @@ export interface WhatIfScenario {
   disclaimer: string;
 }
 
+export type InvestmentHorizon = "weeks" | "months" | "years";
+
+export interface MarketAssetSnapshot {
+  symbol: string;
+  name: string;
+  category: string;
+  currency: string;
+  currentPrice: number;
+  volatilityPct: number;
+  returns: Record<WhatIfPeriod, number>;
+}
+
+export interface InvestmentSuggestion {
+  horizon: InvestmentHorizon;
+  horizonLabel: string;
+  period: WhatIfPeriod;
+  periodLabel: string;
+  asset: MarketAssetSnapshot;
+  investedAmount: number;
+  estimatedReturnPct: number;
+  estimatedValue: number;
+  estimatedGain: number;
+  rationale: string;
+  basis: string;
+  confidence: "low" | "medium" | "high";
+}
+
+export interface InvestmentRecommendations {
+  amount: number;
+  generatedAt: string;
+  source: "ai" | "deterministic";
+  suggestions: InvestmentSuggestion[];
+  market: MarketAssetSnapshot[];
+  disclaimer: string;
+}
+
 export interface FinancialSummary {
   totalIncome: number;
   totalExpenses: number;

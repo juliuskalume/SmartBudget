@@ -2083,6 +2083,40 @@ body::before {
   gap: 0.8rem;
 }
 
+.investment-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.investment-card {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border-radius: 20px;
+  border: 1px solid rgba(114, 144, 255, 0.12);
+  background: linear-gradient(180deg, rgba(17, 24, 38, 0.98), rgba(11, 16, 27, 0.98));
+  box-shadow: inset 0 1px 0 rgba(255, 253, 2, 0.05);
+}
+
+.investment-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.investment-card__header h3 {
+  margin-top: 0.3rem;
+  margin-bottom: 0.15rem;
+  font-size: 1.12rem;
+  color: var(--sb-on-surface);
+}
+
+.investment-card__header p {
+  color: var(--sb-on-surface-variant);
+  line-height: 1.45;
+}
+
 .what-if-panel {
   display: grid;
   gap: 1rem;

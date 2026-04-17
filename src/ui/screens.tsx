@@ -49,7 +49,18 @@ import {
   projectSavings,
   CATEGORY_COLORS,
 } from "../lib/finance";
-import type { AdviceCard, Category, CurrencyCode, FinancialSummary, ManualTransactionDraft, ScreenKey, Transaction, WhatIfPeriod, WhatIfScenario } from "../types";
+import type {
+  AdviceCard,
+  Category,
+  CurrencyCode,
+  FinancialSummary,
+  InvestmentRecommendations,
+  ManualTransactionDraft,
+  ScreenKey,
+  Transaction,
+  WhatIfPeriod,
+  WhatIfScenario,
+} from "../types";
 import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./shared";
 
 const chartTooltipStyle = {
@@ -1016,6 +1027,7 @@ export function AdviceScreen({
   adviceCards,
   insights,
   defaultWhatIfAmountUsd,
+  investableBalanceUsd,
   isBackedBySavings,
   isRefreshingAdvice,
   onRefreshAdvice,
@@ -1024,6 +1036,7 @@ export function AdviceScreen({
   adviceCards: AdviceCard[];
   insights: string[];
   defaultWhatIfAmountUsd: number;
+  investableBalanceUsd: number;
   isBackedBySavings: boolean;
   isRefreshingAdvice: boolean;
   onRefreshAdvice: () => void;
@@ -1034,6 +1047,9 @@ export function AdviceScreen({
   const [whatIfScenario, setWhatIfScenario] = useState<WhatIfScenario | null>(null);
   const [whatIfError, setWhatIfError] = useState<string | null>(null);
   const [isLoadingWhatIf, setIsLoadingWhatIf] = useState(false);
+  const [investmentRecommendations, setInvestmentRecommendations] = useState<InvestmentRecommendations | null>(null);
+  const [investmentError, setInvestmentError] = useState<string | null>(null);
+  const [isLoadingInvestments, setIsLoadingInvestments] = useState(false);
 
   useEffect(() => {
     const amount = normalizeWhatIfAmount(committedAmount);
@@ -1080,6 +1096,65 @@ export function AdviceScreen({
     };
   }, [committedAmount, whatIfPeriod]);
 
+  useEffect(() => {
+    const investableAmount = normalizeInvestableAmount(investableBalanceUsd);
+
+    if (investableAmount <= 0) {
+      setInvestmentRecommendations(null);
+      setInvestmentError("Build a positive protected balance first, then SmartBudget can suggest live market assets.");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadRecommendations() {
+      setIsLoadingInvestments(true);
+      setInvestmentError(null);
+
+      try {
+        const response = await fetch("/api/markets/recommendations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount: investableAmount,
+            summary: {
+              healthScore: summary.healthScore,
+              savingsRate: summary.savingsRate,
+              cashFlow: summary.cashFlow,
+              netWorth: summary.netWorth,
+            },
+          }),
+        });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to load live market suggestions.");
+        }
+
+        if (!cancelled) {
+          setInvestmentRecommendations(payload as InvestmentRecommendations);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setInvestmentRecommendations(null);
+          setInvestmentError(error instanceof Error ? error.message : "Unable to load live market suggestions.");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingInvestments(false);
+        }
+      }
+    }
+
+    void loadRecommendations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [investableBalanceUsd, summary.cashFlow, summary.healthScore, summary.netWorth, summary.savingsRate]);
+
   function applyWhatIfAmount() {
     const nextAmount = Number(amountInput);
 
@@ -1116,6 +1191,78 @@ export function AdviceScreen({
           </article>
         ))}
       </section>
+
+      <Panel
+        title="Where SmartBudget Would Invest Next"
+        subtitle="Live market suggestions ranked with AI when available, then priced against your current protected balance."
+      >
+        <div className="stack">
+          <p className="helper-copy">
+            {investableBalanceUsd > 0
+              ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")}.`
+              : "No protected balance is available yet for live investment suggestions."}
+          </p>
+
+          {investmentRecommendations ? (
+            <>
+              <div className="investment-grid">
+                {investmentRecommendations.suggestions.map((suggestion) => (
+                  <article className="investment-card" key={`${suggestion.horizon}-${suggestion.asset.symbol}`}>
+                    <div className="investment-card__header">
+                      <div>
+                        <span className="eyebrow">{suggestion.horizonLabel}</span>
+                        <h3>{suggestion.asset.name}</h3>
+                        <p>
+                          {suggestion.asset.symbol} · {suggestion.asset.category} · {suggestion.periodLabel} setup
+                        </p>
+                      </div>
+                      <Badge tone={getConfidenceTone(suggestion.confidence)}>{suggestion.confidence} confidence</Badge>
+                    </div>
+
+                    <div className="summary-grid">
+                      <div className="summary-card">
+                        <span>Invest Now</span>
+                        <strong>{formatMoney(suggestion.investedAmount, "USD")}</strong>
+                      </div>
+                      <div className="summary-card">
+                        <span>Scenario Value</span>
+                        <strong>{formatMoney(suggestion.estimatedValue, "USD")}</strong>
+                      </div>
+                      <div className="summary-card">
+                        <span>Scenario Gain</span>
+                        <strong className={suggestion.estimatedGain >= 0 ? "positive" : "negative"}>
+                          {suggestion.estimatedGain >= 0 ? "+" : "-"}
+                          {formatMoney(Math.abs(suggestion.estimatedGain), "USD")}
+                        </strong>
+                      </div>
+                      <div className="summary-card">
+                        <span>Trend Used</span>
+                        <strong className={suggestion.estimatedReturnPct >= 0 ? "positive" : "negative"}>
+                          {suggestion.estimatedReturnPct >= 0 ? "+" : "-"}
+                          {Math.abs(suggestion.estimatedReturnPct).toFixed(1)}%
+                        </strong>
+                      </div>
+                    </div>
+
+                    <p className="helper-copy">{suggestion.rationale}</p>
+                    <p className="helper-copy">{suggestion.basis}</p>
+                  </article>
+                ))}
+              </div>
+
+              <p className="helper-copy">
+                {investmentRecommendations.source === "ai"
+                  ? "Groq ranked the live market universe for your balance and profile before SmartBudget calculated the scenario values."
+                  : "Groq was unavailable, so SmartBudget ranked the live market universe with its local scoring model."}
+              </p>
+              <p className="helper-copy">{investmentRecommendations.disclaimer}</p>
+            </>
+          ) : null}
+
+          {isLoadingInvestments ? <div className="auth-note auth-note--signup">Loading live market suggestions...</div> : null}
+          {investmentError ? <div className="auth-note auth-note--signup">{investmentError}</div> : null}
+        </div>
+      </Panel>
 
       <Panel title="What If You Invested?" subtitle="See what your money would be worth today if it had been placed into the strongest performer in our tracked market basket.">
         <div className="stack">
@@ -1607,7 +1754,23 @@ function normalizeWhatIfAmount(value: number) {
   return Number.isFinite(value) ? Math.max(1, Math.round(value * 100) / 100) : 100;
 }
 
+function normalizeInvestableAmount(value: number) {
+  return Number.isFinite(value) ? Math.max(0, Math.round(value * 100) / 100) : 0;
+}
+
 function formatAmountInput(value: number) {
   const normalized = normalizeWhatIfAmount(value);
   return normalized.toFixed(2).replace(/\.00$/, "");
+}
+
+function getConfidenceTone(confidence: "low" | "medium" | "high"): AdviceCard["type"] {
+  if (confidence === "high") {
+    return "success";
+  }
+
+  if (confidence === "medium") {
+    return "warning";
+  }
+
+  return "error";
 }
