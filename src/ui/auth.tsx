@@ -7,6 +7,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Panel } from "./shared";
+import type { CountryOption } from "../lib/country-data";
 
 export function AuthScreen({
   mode,
@@ -15,6 +16,9 @@ export function AuthScreen({
   onModeChange,
   onEmailChange,
   onPasswordChange,
+  countryCode,
+  countryOptions,
+  onCountryChange,
   onSubmit,
   onTryDemo,
   cloudReady,
@@ -27,6 +31,9 @@ export function AuthScreen({
   onModeChange: (mode: "login" | "signup") => void;
   onEmailChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
+  countryCode: string;
+  countryOptions: CountryOption[];
+  onCountryChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onTryDemo: () => void;
   cloudReady: boolean;
@@ -111,6 +118,19 @@ export function AuthScreen({
             />
           </label>
 
+          {mode === "signup" ? (
+            <label className="field">
+              <span>Country</span>
+              <select className="input" value={countryCode} onChange={(event) => onCountryChange(event.target.value)}>
+                {countryOptions.map((country) => (
+                  <option key={country.code} value={country.code}>
+                    {country.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
           <div className="button-row">
             <button className="button button--primary" type="submit" disabled={isAuthenticating}>
               {isAuthenticating ? (
@@ -145,6 +165,8 @@ export function AuthScreen({
           <div className="auth-note auth-note--signup">
             <ShieldCheck size={16} />
             <span>
+              SmartBudget will use <strong>{countryOptions.find((country) => country.code === countryCode)?.currency ?? "your local currency"}</strong>{" "}
+              for dashboard and ledger display after signup. <br />
               After you sign up, check your email for the confirmation link and open it from{" "}
               <strong>{redirectHost ?? "the same SmartBudget site"}</strong> to return to SmartBudget.
             </span>

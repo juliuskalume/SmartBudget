@@ -1,4 +1,5 @@
-export type CurrencyCode = "TRY" | "USD" | "EUR";
+export type CurrencyCode = string;
+export type StableCurrencyCode = "USD" | "EUR";
 
 export type Category =
   | "Supermarket"
@@ -119,6 +120,7 @@ export interface MarketInsights {
 }
 
 export interface FinancialSummary {
+  currency: CurrencyCode;
   totalIncome: number;
   totalExpenses: number;
   savings: number;
@@ -128,4 +130,11 @@ export interface FinancialSummary {
   cashFlow: number;
   netWorth: number;
   healthScore: number;
+}
+
+export interface ExchangeRateSnapshot {
+  base: CurrencyCode;
+  date: string | null;
+  rates: Record<string, number>;
+  source: "frankfurter" | "fallback";
 }

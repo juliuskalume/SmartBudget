@@ -32,7 +32,9 @@ import {
   parseSmsTransaction,
   projectSavings,
 } from "./lib/finance";
-import type { AdviceCard, CurrencyCode, ManualTransactionDraft, ScreenKey, Transaction } from "./types";
+import { getBalancePurchasingPowerShift, getCountryByCode, getCountryCurrency, getCountryOptions, inferCountryCodeFromLocale } from "./lib/countries";
+import { buildFallbackExchangeRates, fetchExchangeRates, normalizeCurrencyCode } from "./lib/exchange-rates";
+import type { AdviceCard, CurrencyCode, ExchangeRateSnapshot, ManualTransactionDraft, ScreenKey, StableCurrencyCode, Transaction } from "./types";
 import { AppShell } from "./ui/shell";
 import { AuthScreen, PermissionScreen } from "./ui/auth";
 import { Panel, Toast } from "./ui/shared";
@@ -42,6 +44,9 @@ type Session = {
   email: string;
   name: string;
   avatarUrl: string | null;
+  countryCode: string;
+  countryName: string;
+  localCurrency: string;
   mode: "cloud" | "demo";
 };
 
@@ -63,14 +68,19 @@ const SUPPORT_EMAIL = "sentira.official@gmail.com";
 const APP_SHARE_MESSAGE = "Hey, I use SmartBudget to auto track and manage my finances. You can try it too at https://hamid-smart-budget.vercel.app";
 
 function App() {
+  const countryOptions = getCountryOptions();
   const [deviceState, setDeviceState] = useState<DeviceState>(() => loadDeviceState());
   const [cloudState, setCloudState] = useState<CloudState>(() => createDefaultCloudState());
   const [session, setSession] = useState<Session | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [selectedCountryCode, setSelectedCountryCode] = useState(() => inferCountryCodeFromLocale());
   const [flash, setFlash] = useState<Flash | null>(null);
   const [aiAdvice, setAiAdvice] = useState<AdviceCard[] | null>(null);
+  const [exchangeRates, setExchangeRates] = useState<ExchangeRateSnapshot | null>(() =>
+    buildFallbackExchangeRates(getCountryCurrency(inferCountryCodeFromLocale()), ["USD", "EUR", "TRY"]),
+  );
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
@@ -115,6 +125,7 @@ function App() {
       const nextAccount = buildSessionFromSupabase(nextSession);
       isHydratingCloudRef.current = true;
       skipNextCloudSaveRef.current = true;
+      setSelectedCountryCode(nextAccount.countryCode);
       setSession(nextAccount);
 
       if (appliedCloudUserIdRef.current === nextSession.user.id) {
@@ -251,18 +262,53 @@ function App() {
     };
   }, [deviceState.smsAccess, isAndroidNative, session]);
 
-  const summary = computeSummary(cloudState.transactions);
-  const categoryBreakdown = buildCategoryBreakdown(cloudState.transactions);
-  const monthlyTrend = buildMonthlyTrend(cloudState.transactions, 6);
-  const weeklyTrend = buildWeeklyTrend(cloudState.transactions, 8);
-  const insights = buildInsights(summary, cloudState.transactions);
-  const adviceCards = aiAdvice ?? buildAdvice(summary, cloudState.transactions);
+  const displayCurrency = session?.localCurrency ?? getCountryCurrency(selectedCountryCode);
+
+  useEffect(() => {
+    const baseCurrency = session?.localCurrency ?? getCountryCurrency(selectedCountryCode);
+    const quotes = Array.from(
+      new Set(
+        [
+          ...cloudState.transactions.map((transaction) => normalizeCurrencyCode(transaction.currency, "TRY")),
+          cloudState.targetCurrency,
+          "USD",
+          "EUR",
+          "TRY",
+        ].filter((currency) => currency && currency !== baseCurrency),
+      ),
+    );
+    let cancelled = false;
+
+    setExchangeRates(buildFallbackExchangeRates(baseCurrency, quotes));
+
+    void fetchExchangeRates(baseCurrency, quotes)
+      .then((snapshot) => {
+        if (!cancelled) {
+          setExchangeRates(snapshot);
+        }
+      })
+      .catch(() => {
+        // Fall back to bundled rates when live FX is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cloudState.targetCurrency, cloudState.transactions, selectedCountryCode, session?.localCurrency]);
+
+  const summary = computeSummary(cloudState.transactions, displayCurrency, exchangeRates);
+  const categoryBreakdown = buildCategoryBreakdown(cloudState.transactions, displayCurrency, exchangeRates);
+  const monthlyTrend = buildMonthlyTrend(cloudState.transactions, 6, displayCurrency, exchangeRates);
+  const weeklyTrend = buildWeeklyTrend(cloudState.transactions, 8, displayCurrency, exchangeRates);
+  const insights = buildInsights(summary, cloudState.transactions, exchangeRates);
+  const adviceCards = aiAdvice ?? buildAdvice(summary, cloudState.transactions, exchangeRates);
   const safeSavings = Math.max(summary.savings, 0);
   const protectedSavings = safeSavings * 0.6;
-  const convertedSavings = convertCurrency(protectedSavings, cloudState.targetCurrency);
-  const projection = projectSavings(protectedSavings, Math.max(summary.cashFlow, 0), 12);
+  const convertedSavings = convertCurrency(protectedSavings, cloudState.targetCurrency, displayCurrency, exchangeRates);
+  const projection = projectSavings(protectedSavings, Math.max(summary.cashFlow, 0), 12, displayCurrency, exchangeRates);
   const goalProgress =
     cloudState.smartSaveGoal > 0 ? Math.max(0, Math.min(100, (safeSavings / cloudState.smartSaveGoal) * 100)) : 0;
+  const balanceShift = getBalancePurchasingPowerShift(session?.countryCode ?? selectedCountryCode);
 
   function flashMessage(type: Flash["type"], message: string) {
     setFlash({ type, message });
@@ -292,7 +338,7 @@ function App() {
     appliedCloudUserIdRef.current = null;
     isHydratingCloudRef.current = false;
     skipNextCloudSaveRef.current = true;
-    setSession(buildDemoSession(email.trim() || "demo@smartbudget.app"));
+    setSession(buildDemoSession(email.trim() || "demo@smartbudget.app", selectedCountryCode));
     setCloudState(demoCloudState);
     setDeviceState((current) => ({
       ...current,
@@ -310,6 +356,7 @@ function App() {
     const trimmedEmail = email.trim().toLowerCase();
     const trimmedPassword = password.trim();
     const emailRedirectTo = getAuthRedirectUrl();
+    const selectedCountry = getCountryByCode(selectedCountryCode);
 
     if (!trimmedEmail || !trimmedEmail.includes("@") || !trimmedPassword) {
       flashMessage("warning", "Enter a valid email and password to continue.");
@@ -332,6 +379,7 @@ function App() {
             ...(emailRedirectTo ? { emailRedirectTo } : {}),
             data: {
               name: displayNameFromEmail(trimmedEmail),
+              country_code: selectedCountry.code,
             },
           },
         });
@@ -433,11 +481,11 @@ function App() {
     setCloudState((current) => ({ ...current, smartSaveGoal: value }));
   }
 
-  function updateTargetCurrency(value: CurrencyCode) {
+  function updateTargetCurrency(value: StableCurrencyCode) {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
   }
 
-  async function saveProfileDetails(input: { name: string; email: string; avatarUrl: string }) {
+  async function saveProfileDetails(input: { name: string; email: string; avatarUrl: string; countryCode: string }) {
     if (!session) {
       return false;
     }
@@ -445,6 +493,7 @@ function App() {
     const nextName = input.name.trim();
     const nextEmail = input.email.trim().toLowerCase();
     const nextAvatarUrl = input.avatarUrl.trim();
+    const nextCountry = getCountryByCode(input.countryCode);
     const normalizedAvatarUrl = nextAvatarUrl || null;
 
     if (!nextName) {
@@ -465,9 +514,13 @@ function App() {
               name: nextName,
               email: nextEmail,
               avatarUrl: normalizedAvatarUrl,
+              countryCode: nextCountry.code,
+              countryName: nextCountry.name,
+              localCurrency: nextCountry.currency,
             }
           : current,
       );
+      setSelectedCountryCode(nextCountry.code);
       setEmail(nextEmail);
       flashMessage("success", "Profile updated in demo mode.");
       return true;
@@ -481,8 +534,9 @@ function App() {
     const emailChanged = nextEmail !== session.email;
     const nameChanged = nextName !== session.name;
     const avatarChanged = normalizedAvatarUrl !== session.avatarUrl;
+    const countryChanged = nextCountry.code !== session.countryCode;
 
-    if (!emailChanged && !nameChanged && !avatarChanged) {
+    if (!emailChanged && !nameChanged && !avatarChanged && !countryChanged) {
       flashMessage("neutral", "No profile changes to save.");
       return true;
     }
@@ -495,6 +549,7 @@ function App() {
         data?: {
           name: string;
           avatar_url: string | null;
+          country_code: string;
         };
       } = {};
 
@@ -502,10 +557,11 @@ function App() {
         payload.email = nextEmail;
       }
 
-      if (nameChanged || avatarChanged) {
+      if (nameChanged || avatarChanged || countryChanged) {
         payload.data = {
           name: nextName,
           avatar_url: normalizedAvatarUrl,
+          country_code: nextCountry.code,
         };
       }
 
@@ -516,6 +572,8 @@ function App() {
 
       const updatedName = readMetadataName(data.user?.user_metadata, nextName);
       const updatedAvatarUrl = readMetadataAvatarUrl(data.user?.user_metadata, normalizedAvatarUrl);
+      const updatedCountryCode = readMetadataCountryCode(data.user?.user_metadata, nextCountry.code);
+      const updatedCountry = getCountryByCode(updatedCountryCode);
       const updatedEmail = data.user?.email?.trim().toLowerCase() || nextEmail;
 
       setSession((current) =>
@@ -525,9 +583,13 @@ function App() {
               name: updatedName,
               email: updatedEmail,
               avatarUrl: updatedAvatarUrl,
+              countryCode: updatedCountry.code,
+              countryName: updatedCountry.name,
+              localCurrency: updatedCountry.currency,
             }
           : current,
       );
+      setSelectedCountryCode(updatedCountry.code);
       setEmail(updatedEmail);
       flashMessage(
         "success",
@@ -712,10 +774,7 @@ function App() {
         const merchant = typeof aiResult?.merchant === "string" ? aiResult.merchant.trim() : "";
         const category = typeof aiResult?.category === "string" ? normalizeCategory(aiResult.category) : fallback?.category ?? "Other";
         const kind = aiResult?.kind === "income" || aiResult?.kind === "expense" ? aiResult.kind : fallback?.kind ?? "expense";
-        const currency =
-          aiResult?.currency === "USD" || aiResult?.currency === "EUR" || aiResult?.currency === "TRY"
-            ? aiResult.currency
-            : fallback?.currency ?? "TRY";
+        const currency = normalizeCurrencyCode(typeof aiResult?.currency === "string" ? aiResult.currency : fallback?.currency ?? "TRY", "TRY");
 
         if (Number.isFinite(amount) && amount > 0) {
           fallback = {
@@ -1011,9 +1070,12 @@ function App() {
           mode={authMode}
           email={email}
           password={password}
+          countryCode={selectedCountryCode}
+          countryOptions={countryOptions}
           onModeChange={setAuthMode}
           onEmailChange={setEmail}
           onPasswordChange={setPassword}
+          onCountryChange={setSelectedCountryCode}
           onSubmit={handleAuthSubmit}
           onTryDemo={loadDemoData}
           cloudReady={isSupabaseConfigured}
@@ -1047,6 +1109,9 @@ function App() {
         activeScreen={deviceState.activeScreen}
         summary={summary}
         transactions={cloudState.transactions}
+        displayCurrency={displayCurrency}
+        exchangeRates={exchangeRates}
+        balanceShift={balanceShift}
         isAndroidNative={isAndroidNative}
         goalProgress={goalProgress}
         safeSavings={safeSavings}
@@ -1111,12 +1176,16 @@ function cloneDemoTransactions() {
   return demoTransactions.map((transaction) => ({ ...transaction }));
 }
 
-function buildDemoSession(email: string): Session {
+function buildDemoSession(email: string, countryCode: string): Session {
+  const country = getCountryByCode(countryCode);
   return {
     userId: "demo",
     email,
     name: "Demo User",
     avatarUrl: null,
+    countryCode: country.code,
+    countryName: country.name,
+    localCurrency: country.currency,
     mode: "demo",
   };
 }
@@ -1124,12 +1193,16 @@ function buildDemoSession(email: string): Session {
 function buildSessionFromSupabase(session: SupabaseSession): Session {
   const email = session.user.email?.trim().toLowerCase() || "student@smartbudget.app";
   const metadataName = readMetadataName(session.user.user_metadata);
+  const country = getCountryByCode(readMetadataCountryCode(session.user.user_metadata, inferCountryCodeFromLocale()));
 
   return {
     userId: session.user.id,
     email,
     name: metadataName || displayNameFromEmail(email),
     avatarUrl: readMetadataAvatarUrl(session.user.user_metadata),
+    countryCode: country.code,
+    countryName: country.name,
+    localCurrency: country.currency,
     mode: "cloud",
   };
 }
@@ -1153,6 +1226,12 @@ function readMetadataName(metadata: unknown, fallback = "") {
 function readMetadataAvatarUrl(metadata: unknown, fallback: string | null = null) {
   return typeof (metadata as { avatar_url?: unknown } | null)?.avatar_url === "string"
     ? (metadata as { avatar_url: string }).avatar_url.trim() || fallback
+    : fallback;
+}
+
+function readMetadataCountryCode(metadata: unknown, fallback = inferCountryCodeFromLocale()) {
+  return typeof (metadata as { country_code?: unknown } | null)?.country_code === "string"
+    ? (metadata as { country_code: string }).country_code.trim().toUpperCase() || fallback
     : fallback;
 }
 

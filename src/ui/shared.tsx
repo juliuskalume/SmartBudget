@@ -184,7 +184,7 @@ export function HealthProgress({ value }: { value: number }) {
   );
 }
 
-export function MoneyValue({ value, currency = "TRY" }: { value: number; currency?: "TRY" | "USD" | "EUR" }) {
+export function MoneyValue({ value, currency = "TRY" }: { value: number; currency?: string }) {
   return <>{formatMoney(value, currency)}</>;
 }
 

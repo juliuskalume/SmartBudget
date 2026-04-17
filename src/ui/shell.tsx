@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import { Home, Lightbulb, PiggyBank, ReceiptText, TrendingUp } from "lucide-react";
-import type { AdviceCard, CurrencyCode, FinancialSummary, ManualTransactionDraft, ScreenKey, Transaction } from "../types";
+import type { AdviceCard, ExchangeRateSnapshot, FinancialSummary, ManualTransactionDraft, ScreenKey, StableCurrencyCode, Transaction } from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
 import { AdviceScreen, AnalysisScreen, DashboardScreen, ProfileScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
 
@@ -8,6 +8,9 @@ type AppSessionView = {
   email: string;
   name: string;
   avatarUrl: string | null;
+  countryCode: string;
+  countryName: string;
+  localCurrency: string;
   mode: "cloud" | "demo";
 };
 
@@ -16,6 +19,9 @@ export function AppShell({
   activeScreen,
   summary,
   transactions,
+  displayCurrency,
+  exchangeRates,
+  balanceShift,
   isAndroidNative,
   goalProgress,
   safeSavings,
@@ -50,13 +56,16 @@ export function AppShell({
   activeScreen: ScreenKey;
   summary: FinancialSummary;
   transactions: Transaction[];
+  displayCurrency: string;
+  exchangeRates: ExchangeRateSnapshot | null;
+  balanceShift: { latestMonth: string | null; inflationPct: number; purchasingPowerShiftPct: number; isIncrease: boolean } | null;
   isAndroidNative: boolean;
   goalProgress: number;
   safeSavings: number;
   protectedSavings: number;
   convertedSavings: number;
   projection: ReturnType<typeof projectSavings>;
-  targetCurrency: CurrencyCode;
+  targetCurrency: StableCurrencyCode;
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
@@ -73,17 +82,17 @@ export function AppShell({
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: CurrencyCode) => void;
-  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string }) => Promise<boolean>;
+  onUpdateTargetCurrency: (value: StableCurrencyCode) => void;
+  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
   onDeleteAccount: () => Promise<boolean>;
 }) {
-  const categoryBreakdown = buildCategoryBreakdown(transactions);
-  const monthlyTrend = buildMonthlyTrend(transactions, 6);
-  const yearlyTrend = buildMonthlyTrend(transactions, 12);
-  const weeklyTrend = buildWeeklyTrend(transactions, 8);
+  const categoryBreakdown = buildCategoryBreakdown(transactions, displayCurrency, exchangeRates);
+  const monthlyTrend = buildMonthlyTrend(transactions, 6, displayCurrency, exchangeRates);
+  const yearlyTrend = buildMonthlyTrend(transactions, 12, displayCurrency, exchangeRates);
+  const weeklyTrend = buildWeeklyTrend(transactions, 8, displayCurrency, exchangeRates);
   const headerMeta = getHeaderMeta(activeScreen);
   const screen = renderScreen({
     session,
@@ -94,6 +103,9 @@ export function AppShell({
     yearlyTrend,
     weeklyTrend,
     transactions,
+    displayCurrency,
+    exchangeRates,
+    balanceShift,
     isAndroidNative,
     goalProgress,
     safeSavings,
@@ -203,6 +215,9 @@ function renderScreen({
   yearlyTrend,
   weeklyTrend,
   transactions,
+  displayCurrency,
+  exchangeRates,
+  balanceShift,
   isAndroidNative,
   goalProgress,
   safeSavings,
@@ -241,13 +256,16 @@ function renderScreen({
   yearlyTrend: ReturnType<typeof buildMonthlyTrend>;
   weeklyTrend: ReturnType<typeof buildWeeklyTrend>;
   transactions: Transaction[];
+  displayCurrency: string;
+  exchangeRates: ExchangeRateSnapshot | null;
+  balanceShift: { latestMonth: string | null; inflationPct: number; purchasingPowerShiftPct: number; isIncrease: boolean } | null;
   isAndroidNative: boolean;
   goalProgress: number;
   safeSavings: number;
   protectedSavings: number;
   convertedSavings: number;
   projection: ReturnType<typeof projectSavings>;
-  targetCurrency: CurrencyCode;
+  targetCurrency: StableCurrencyCode;
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
@@ -261,10 +279,10 @@ function renderScreen({
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: CurrencyCode) => void;
+  onUpdateTargetCurrency: (value: StableCurrencyCode) => void;
   onImportNativeSms: () => void;
   onRefreshAdvice: () => void;
-  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string }) => Promise<boolean>;
+  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
@@ -279,6 +297,9 @@ function renderScreen({
           categoryBreakdown={categoryBreakdown}
           monthlyTrend={monthlyTrend}
           recentTransactions={transactions.slice(0, 6)}
+          displayCurrency={displayCurrency}
+          exchangeRates={exchangeRates}
+          balanceShift={balanceShift}
           insights={insights}
           isAndroidNative={isAndroidNative}
           goalProgress={goalProgress}
@@ -292,6 +313,8 @@ function renderScreen({
       return (
         <TransactionsScreen
           transactions={transactions}
+          displayCurrency={displayCurrency}
+          exchangeRates={exchangeRates}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
           onAddManualTransaction={onAddManualTransaction}
@@ -322,6 +345,7 @@ function renderScreen({
           convertedSavings={convertedSavings}
           projection={projection}
           targetCurrency={targetCurrency}
+          exchangeRates={exchangeRates}
           smartSaveGoal={smartSaveGoal}
           onUpdateGoal={onUpdateGoal}
           onUpdateTargetCurrency={onUpdateTargetCurrency}
@@ -333,8 +357,8 @@ function renderScreen({
           summary={summary}
           adviceCards={adviceCards}
           insights={insights}
-          defaultWhatIfAmountUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD") : 100}
-          investableBalanceUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD") : 0}
+          defaultWhatIfAmountUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD", summary.currency, exchangeRates) : 100}
+          investableBalanceUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD", summary.currency, exchangeRates) : 0}
           isBackedBySavings={protectedSavings > 0}
           isRefreshingAdvice={isRefreshingAdvice}
           onRefreshAdvice={onRefreshAdvice}

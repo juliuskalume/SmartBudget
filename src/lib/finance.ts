@@ -2,10 +2,13 @@ import type {
   AdviceCard,
   Category,
   CurrencyCode,
+  ExchangeRateSnapshot,
   FinancialSummary,
+  StableCurrencyCode,
   Transaction,
   TransactionKind,
 } from "../types";
+import { buildFallbackExchangeRates, normalizeCurrencyCode } from "./exchange-rates";
 
 export const CATEGORY_ORDER: Category[] = [
   "Supermarket",
@@ -25,25 +28,12 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   Other: "#ff9a1f",
 };
 
-export const FX_RATES: Record<CurrencyCode, number> = {
-  TRY: 1,
-  USD: 32.5,
-  EUR: 35.5,
-};
-
-export const CURRENCY_LABELS: Record<CurrencyCode, string> = {
-  TRY: "TL",
-  USD: "USD",
-  EUR: "EUR",
-};
-
 const SUPERMARKET_KEYWORDS = [
   "migros",
   "carrefour",
   "a101",
   "bim",
   "sok",
-  "şok",
   "macrocenter",
   "market",
   "grocery",
@@ -56,7 +46,7 @@ const TRANSPORT_KEYWORDS = [
   "taksi",
   "metro",
   "bus",
-  "otobüs",
+  "otobus",
   "train",
   "tren",
   "petrol",
@@ -91,7 +81,7 @@ const BILLS_KEYWORDS = [
   "bill",
   "fatura",
   "gsm",
-  "kredi kartı",
+  "kredi kart",
   "credit card",
   "loan",
   "installment",
@@ -108,16 +98,11 @@ const EDUCATION_KEYWORDS = [
   "udemy",
   "coursera",
   "education",
-  "eğitim",
+  "egitim",
 ];
 
 function normalizeText(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[“”]/g, '"')
-    .replace(/[’]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+  return input.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function capitalizeWords(input: string) {
@@ -133,17 +118,22 @@ function parseCurrencyToken(raw: string): CurrencyCode {
   if (normalized.includes("usd") || normalized.includes("$")) {
     return "USD";
   }
-  if (normalized.includes("eur") || normalized.includes("€")) {
+  if (normalized.includes("eur") || normalized.includes("euro") || normalized.includes("eur")) {
     return "EUR";
   }
-  return "TRY";
+  if (normalized.includes("try") || normalized.includes("tl") || normalized.includes("turkish lira")) {
+    return "TRY";
+  }
+
+  const isoMatch = raw.trim().toUpperCase().match(/\b([A-Z]{3})\b/);
+  return normalizeCurrencyCode(isoMatch?.[1], "TRY");
 }
 
 function extractAmount(text: string) {
   const currencyPattern =
-    /(?:(?:tl|try|₺|usd|\$|eur|€)\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(tl|try|₺|usd|\$|eur|€)?/i;
+    /(?:(?:tl|try|usd|\$|eur|[a-z]{3})\s*)?(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(tl|try|usd|\$|eur|[a-z]{3})?/i;
   const trailingPattern =
-    /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(tl|try|₺|usd|\$|eur|€)/i;
+    /(\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(tl|try|usd|\$|eur|[a-z]{3})/i;
 
   const matched = text.match(trailingPattern) ?? text.match(currencyPattern);
   if (!matched) {
@@ -169,26 +159,26 @@ function extractAmount(text: string) {
 function detectKind(text: string): TransactionKind {
   const normalized = normalizeText(text);
   const incomeSignals = [
-    "yatırıldı",
-    "yattı",
+    "yatirildi",
+    "yatti",
     "credited",
     "deposited",
     "transfer received",
     "refund",
     "iade",
-    "girişi",
+    "girisi",
     "received",
   ];
   const expenseSignals = [
     "harcama",
     "spent",
     "payment",
-    "ödem",
+    "odem",
     "debit",
     "withdraw",
-    "çekim",
+    "cekim",
     "spent at",
-    "kartınızla",
+    "kartinizla",
     "card used",
     "purchase",
   ];
@@ -206,8 +196,7 @@ function detectKind(text: string): TransactionKind {
 
 function detectCategory(merchant: string, text: string): Category {
   const normalized = normalizeText(`${merchant} ${text}`);
-  const hasAny = (keywords: string[]) =>
-    keywords.some((keyword) => normalized.includes(keyword));
+  const hasAny = (keywords: string[]) => keywords.some((keyword) => normalized.includes(keyword));
 
   if (hasAny(SUPERMARKET_KEYWORDS)) {
     return "Supermarket";
@@ -233,38 +222,28 @@ function detectCategory(merchant: string, text: string): Category {
 }
 
 function extractMerchant(text: string) {
-  const normalized = text
-    .replace(/[“”]/g, '"')
-    .replace(/[’]/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
-
+  const normalized = text.replace(/\s+/g, " ").trim();
   const patterns = [
-    /(?:at|from|via)\s+([A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+){0,3})/i,
-    /([A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+)(?:['’](?:ta|te|da|de))\b/i,
-    /(?:merchant|store|place)\s+([A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+){0,3})/i,
-    /(?:harcama|ödeme|payment|purchase)\s+(?:için\s+)?([A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+(?:\s+[A-Za-zÇĞİÖŞÜçğıöşü0-9&.'-]+){0,3})/i,
+    /(?:at|from|via)\s+([A-Za-z0-9&.'-]+(?:\s+[A-Za-z0-9&.'-]+){0,3})/i,
+    /(?:merchant|store|place)\s+([A-Za-z0-9&.'-]+(?:\s+[A-Za-z0-9&.'-]+){0,3})/i,
+    /(?:harcama|payment|purchase)\s+(?:icin\s+)?([A-Za-z0-9&.'-]+(?:\s+[A-Za-z0-9&.'-]+){0,3})/i,
   ];
 
   for (const pattern of patterns) {
     const match = normalized.match(pattern);
     if (match?.[1]) {
-      return capitalizeWords(match[1].replace(/['’](?:ta|te|da|de)$/i, "").trim());
+      return capitalizeWords(match[1].trim());
     }
   }
 
-  const amountPattern =
-    /(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:tl|try|₺|usd|\$|eur|€)/i;
+  const amountPattern = /(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:tl|try|usd|\$|eur|[a-z]{3})/i;
   const amountIndex = normalized.search(amountPattern);
   if (amountIndex > 0) {
     const beforeAmount = normalized.slice(0, amountIndex).trim();
     const words = beforeAmount.split(" ").filter(Boolean);
     const candidate = words.slice(-3).join(" ");
     if (candidate) {
-      const cleaned = candidate.replace(
-        /^(hesabınızdan|hesabinizdan|your card|your account|kartınızdan|kartinizdan|from|at|payment|purchase|harcama)$/i,
-        "",
-      );
+      const cleaned = candidate.replace(/^(your card|your account|from|at|payment|purchase|harcama)$/i, "");
       if (cleaned.trim()) {
         return capitalizeWords(cleaned.trim());
       }
@@ -303,19 +282,45 @@ export function parseSmsTransaction(rawSms: string): Transaction | null {
 }
 
 export function formatMoney(amount: number, currency: CurrencyCode = "TRY") {
-  const rounded = Number.isInteger(amount)
-    ? amount.toLocaleString("tr-TR", { maximumFractionDigits: 0 })
-    : amount.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const normalizedCurrency = normalizeCurrencyCode(currency, "USD");
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const minimumFractionDigits = Number.isInteger(safeAmount) ? 0 : 2;
+  const maximumFractionDigits = 2;
 
-  if (currency === "TRY") {
-    return `${rounded} TL`;
+  if (normalizedCurrency === "TRY") {
+    return `${safeAmount.toLocaleString("tr-TR", {
+      minimumFractionDigits,
+      maximumFractionDigits,
+    })} TL`;
   }
 
-  const symbol = currency === "USD" ? "$" : "€";
-  return `${symbol}${amount.toLocaleString("en-US", {
-    minimumFractionDigits: Number.isInteger(amount) ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
+  if (normalizedCurrency === "USD") {
+    return `$${safeAmount.toLocaleString("en-US", {
+      minimumFractionDigits,
+      maximumFractionDigits,
+    })}`;
+  }
+
+  if (normalizedCurrency === "EUR") {
+    return `\u20ac${safeAmount.toLocaleString("en-US", {
+      minimumFractionDigits,
+      maximumFractionDigits,
+    })}`;
+  }
+
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: normalizedCurrency,
+      minimumFractionDigits,
+      maximumFractionDigits,
+    }).format(safeAmount);
+  } catch {
+    return `${safeAmount.toLocaleString("en-US", {
+      minimumFractionDigits,
+      maximumFractionDigits,
+    })} ${normalizedCurrency}`;
+  }
 }
 
 export function formatPercent(value: number) {
@@ -329,8 +334,61 @@ export function formatDateLabel(date: string) {
   }).format(new Date(date));
 }
 
-export function convertCurrency(amount: number, currency: CurrencyCode) {
-  return amount / FX_RATES[currency];
+export function convertCurrency(
+  amount: number,
+  targetCurrency: StableCurrencyCode,
+  baseCurrency: CurrencyCode = "TRY",
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  return convertMoney(amount, baseCurrency, targetCurrency, exchangeRates);
+}
+
+export function convertMoney(
+  amount: number,
+  fromCurrency: CurrencyCode,
+  toCurrency: CurrencyCode,
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  const normalizedFrom = normalizeCurrencyCode(fromCurrency, "USD");
+  const normalizedTo = normalizeCurrencyCode(toCurrency, "USD");
+
+  if (!Number.isFinite(amount)) {
+    return 0;
+  }
+
+  if (normalizedFrom === normalizedTo) {
+    return amount;
+  }
+
+  const snapshot =
+    exchangeRates?.base === normalizedTo
+      ? exchangeRates
+      : buildFallbackExchangeRates(normalizedTo, [normalizedFrom]);
+  const directRate = snapshot.rates[normalizedFrom];
+
+  if (Number.isFinite(directRate) && directRate > 0) {
+    return amount / directRate;
+  }
+
+  const reverseSnapshot =
+    exchangeRates?.base === normalizedFrom
+      ? exchangeRates
+      : buildFallbackExchangeRates(normalizedFrom, [normalizedTo]);
+  const reverseRate = reverseSnapshot.rates[normalizedTo];
+
+  if (Number.isFinite(reverseRate) && reverseRate > 0) {
+    return amount * reverseRate;
+  }
+
+  return amount;
+}
+
+export function convertTransactionAmount(
+  transaction: Pick<Transaction, "amount" | "currency">,
+  displayCurrency: CurrencyCode,
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  return convertMoney(transaction.amount, transaction.currency, displayCurrency, exchangeRates);
 }
 
 export function normalizeCategory(category: string): Category {
@@ -361,37 +419,37 @@ export function normalizeAdviceType(type: string): AdviceCard["type"] {
   return "warning";
 }
 
-export function computeSummary(transactions: Transaction[]): FinancialSummary {
+export function computeSummary(
+  transactions: Transaction[],
+  displayCurrency: CurrencyCode = "TRY",
+  exchangeRates?: ExchangeRateSnapshot | null,
+): FinancialSummary {
+  const normalizedCurrency = normalizeCurrencyCode(displayCurrency, "TRY");
   const totalIncome = transactions
     .filter((transaction) => transaction.kind === "income")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+    .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
   const totalExpenses = transactions
     .filter((transaction) => transaction.kind === "expense")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+    .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
   const savings = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? Math.max(savings, 0) / totalIncome * 100 : 0;
-  const expenseRatio = totalIncome > 0 ? totalExpenses / totalIncome * 100 : 0;
+  const savingsRate = totalIncome > 0 ? (Math.max(savings, 0) / totalIncome) * 100 : 0;
+  const expenseRatio = totalIncome > 0 ? (totalExpenses / totalIncome) * 100 : 0;
   const debtAmount = transactions
     .filter(
       (transaction) =>
-        transaction.kind === "expense" &&
-        /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.merchant) ||
-        transaction.category === "Bills" &&
-        /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.rawSms ?? transaction.merchant),
+        (transaction.kind === "expense" && /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.merchant)) ||
+        (transaction.category === "Bills" && /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.rawSms ?? transaction.merchant)),
     )
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+    .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
-  const debtLevel = totalIncome > 0 ? debtAmount / totalIncome * 100 : 0;
+  const debtLevel = totalIncome > 0 ? (debtAmount / totalIncome) * 100 : 0;
   const netWorth = savings + Math.max(savings * 0.15, 0);
-  const healthScore = clamp(
-    50 + savingsRate * 0.65 - expenseRatio * 0.2 - debtLevel * 0.45 + (savings > 0 ? 6 : -8),
-    0,
-    100,
-  );
+  const healthScore = clamp(50 + savingsRate * 0.65 - expenseRatio * 0.2 - debtLevel * 0.45 + (savings > 0 ? 6 : -8), 0, 100);
 
   return {
+    currency: normalizedCurrency,
     totalIncome,
     totalExpenses,
     savings,
@@ -408,19 +466,24 @@ export function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function buildCategoryBreakdown(transactions: Transaction[]) {
+export function buildCategoryBreakdown(
+  transactions: Transaction[],
+  displayCurrency: CurrencyCode = "TRY",
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  const normalizedCurrency = normalizeCurrencyCode(displayCurrency, "TRY");
   const expenses = transactions.filter((transaction) => transaction.kind === "expense");
-  const total = expenses.reduce((sum, transaction) => sum + transaction.amount, 0);
+  const total = expenses.reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
   return CATEGORY_ORDER.map((category) => {
     const amount = expenses
       .filter((transaction) => transaction.category === category)
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
+      .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
     return {
       category,
       amount,
-      share: total > 0 ? amount / total * 100 : 0,
+      share: total > 0 ? (amount / total) * 100 : 0,
       color: CATEGORY_COLORS[category],
     };
   }).filter((item) => item.amount > 0);
@@ -430,7 +493,13 @@ function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
 
-export function buildMonthlyTrend(transactions: Transaction[], months = 6) {
+export function buildMonthlyTrend(
+  transactions: Transaction[],
+  months = 6,
+  displayCurrency: CurrencyCode = "TRY",
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  const normalizedCurrency = normalizeCurrencyCode(displayCurrency, "TRY");
   const now = new Date();
   const labels = Array.from({ length: months }, (_, index) => {
     const monthDate = new Date(now.getFullYear(), now.getMonth() - (months - 1 - index), 1);
@@ -447,10 +516,10 @@ export function buildMonthlyTrend(transactions: Transaction[], months = 6) {
 
     const income = bucket
       .filter((transaction) => transaction.kind === "income")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
+      .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
     const expenses = bucket
       .filter((transaction) => transaction.kind === "expense")
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
+      .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
     return {
       label: monthDate.toLocaleDateString("en-US", { month: "short" }),
@@ -461,7 +530,13 @@ export function buildMonthlyTrend(transactions: Transaction[], months = 6) {
   });
 }
 
-export function buildWeeklyTrend(transactions: Transaction[], weeks = 8) {
+export function buildWeeklyTrend(
+  transactions: Transaction[],
+  weeks = 8,
+  displayCurrency: CurrencyCode = "TRY",
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  const normalizedCurrency = normalizeCurrencyCode(displayCurrency, "TRY");
   const now = new Date();
   const start = startOfMonth(new Date(now.getFullYear(), now.getMonth() - 1, 1));
   start.setDate(start.getDate() - (weeks - 1) * 7);
@@ -484,11 +559,9 @@ export function buildWeeklyTrend(transactions: Transaction[], weeks = 8) {
     }
 
     const txDate = new Date(transaction.date);
-    const bucket = buckets.find(
-      (entry) => txDate >= entry.start && txDate < entry.end,
-    );
+    const bucket = buckets.find((entry) => txDate >= entry.start && txDate < entry.end);
     if (bucket) {
-      bucket.value += transaction.amount;
+      bucket.value += convertTransactionAmount(transaction, normalizedCurrency, exchangeRates);
     }
   }
 
@@ -498,7 +571,7 @@ export function buildWeeklyTrend(transactions: Transaction[], weeks = 8) {
   }));
 }
 
-export function buildInsights(summary: FinancialSummary, transactions: Transaction[]) {
+export function buildInsights(summary: FinancialSummary, transactions: Transaction[], exchangeRates?: ExchangeRateSnapshot | null) {
   if (transactions.length === 0) {
     return [
       "Import your first bank SMS to start the ledger.",
@@ -507,8 +580,8 @@ export function buildInsights(summary: FinancialSummary, transactions: Transacti
     ];
   }
 
-  const categoryBreakdown = buildCategoryBreakdown(transactions);
-  const monthlyTrend = buildMonthlyTrend(transactions, 2);
+  const categoryBreakdown = buildCategoryBreakdown(transactions, summary.currency, exchangeRates);
+  const monthlyTrend = buildMonthlyTrend(transactions, 2, summary.currency, exchangeRates);
 
   const insights: string[] = [];
 
@@ -520,9 +593,7 @@ export function buildInsights(summary: FinancialSummary, transactions: Transacti
 
   const topCategory = categoryBreakdown[0];
   if (topCategory) {
-    insights.push(
-      `${topCategory.category} now makes up ${formatPercent(topCategory.share)} of tracked spending.`,
-    );
+    insights.push(`${topCategory.category} now makes up ${formatPercent(topCategory.share)} of tracked spending.`);
   }
 
   if (monthlyTrend.length >= 2) {
@@ -539,15 +610,15 @@ export function buildInsights(summary: FinancialSummary, transactions: Transacti
   }
 
   if (summary.cashFlow >= 0) {
-    insights.push(`Cash flow is positive by ${formatMoney(summary.cashFlow)}.`);
+    insights.push(`Cash flow is positive by ${formatMoney(summary.cashFlow, summary.currency)}.`);
   } else {
-    insights.push(`You are overspending by ${formatMoney(Math.abs(summary.cashFlow))}.`);
+    insights.push(`You are overspending by ${formatMoney(Math.abs(summary.cashFlow), summary.currency)}.`);
   }
 
   return insights.slice(0, 3);
 }
 
-export function buildAdvice(summary: FinancialSummary, transactions: Transaction[]): AdviceCard[] {
+export function buildAdvice(summary: FinancialSummary, transactions: Transaction[], exchangeRates?: ExchangeRateSnapshot | null): AdviceCard[] {
   if (transactions.length === 0) {
     return [
       {
@@ -568,7 +639,7 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
     ];
   }
 
-  const categoryBreakdown = buildCategoryBreakdown(transactions);
+  const categoryBreakdown = buildCategoryBreakdown(transactions, summary.currency, exchangeRates);
   const topCategory = categoryBreakdown[0];
   const entertainment = categoryBreakdown.find((entry) => entry.category === "Entertainment");
   const supermarket = categoryBreakdown.find((entry) => entry.category === "Supermarket");
@@ -613,13 +684,13 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
     cards.push({
       type: "success",
       title: "Protect this month's surplus",
-      description: `You have ${formatMoney(summary.cashFlow)} of positive cash flow. Move part of it into Smart Save+ and convert it to a stable currency.`,
+      description: `You have ${formatMoney(summary.cashFlow, summary.currency)} of positive cash flow. Move part of it into Smart Save+ and convert it to a stable currency.`,
     });
   } else {
     cards.push({
       type: "error",
       title: "Close the gap before it grows",
-      description: `Spending exceeded income by ${formatMoney(Math.abs(summary.cashFlow))}. Cut one bill or entertainment expense this week.`,
+      description: `Spending exceeded income by ${formatMoney(Math.abs(summary.cashFlow), summary.currency)}. Cut one bill or entertainment expense this week.`,
     });
   }
 
@@ -643,18 +714,26 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
   return cards.slice(0, 3);
 }
 
-export function projectSavings(startAmount: number, monthlyContribution: number, months = 12) {
+export function projectSavings(
+  startAmount: number,
+  monthlyContribution: number,
+  months = 12,
+  baseCurrency: CurrencyCode = "TRY",
+  exchangeRates?: ExchangeRateSnapshot | null,
+) {
+  const normalizedCurrency = normalizeCurrencyCode(baseCurrency, "TRY");
   const start = Math.max(startAmount, 0);
   const contribution = Math.max(monthlyContribution, 0);
 
   return Array.from({ length: months }, (_, index) => {
     const monthsAhead = index + 1;
-    const tryValue = start + contribution * monthsAhead;
+    const baseValue = start + contribution * monthsAhead;
     return {
       label: `${monthsAhead}M`,
-      tryValue,
-      usdValue: convertCurrency(tryValue, "USD"),
-      eurValue: convertCurrency(tryValue, "EUR"),
+      baseValue,
+      baseCurrency: normalizedCurrency,
+      usdValue: convertMoney(baseValue, normalizedCurrency, "USD", exchangeRates),
+      eurValue: convertMoney(baseValue, normalizedCurrency, "EUR", exchangeRates),
     };
   });
 }

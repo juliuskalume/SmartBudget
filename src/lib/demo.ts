@@ -1,4 +1,4 @@
-import type { CurrencyCode, Transaction } from "../types";
+import type { StableCurrencyCode, Transaction } from "../types";
 
 function daysAgo(days: number) {
   const date = new Date();
@@ -138,4 +138,4 @@ export const demoTransactions: Transaction[] = [
   },
 ];
 
-export const targetCurrencies: CurrencyCode[] = ["USD", "EUR"];
+export const targetCurrencies: StableCurrencyCode[] = ["USD", "EUR"];

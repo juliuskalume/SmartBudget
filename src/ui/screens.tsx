@@ -43,21 +43,25 @@ import {
   buildCategoryBreakdown,
   buildMonthlyTrend,
   convertCurrency,
+  convertTransactionAmount,
   formatDateLabel,
   formatMoney,
   formatPercent,
   projectSavings,
   CATEGORY_COLORS,
 } from "../lib/finance";
+import { getCountryOptions, getCurrencyChoices } from "../lib/countries";
 import type {
   AdviceCard,
   Category,
   CurrencyCode,
+  ExchangeRateSnapshot,
   FinancialSummary,
   InvestmentRecommendations,
   MarketInsights,
   ManualTransactionDraft,
   ScreenKey,
+  StableCurrencyCode,
   Transaction,
   WhatIfAssetPerformance,
   WhatIfPeriod,
@@ -113,11 +117,11 @@ const transactionCategoryTiles = [
   { id: "education", label: "Education", category: "Education" as const, icon: GraduationCap },
 ];
 
-function createManualDraft(kind: Transaction["kind"] = "expense"): ManualTransactionDraft {
+function createManualDraft(localCurrency: CurrencyCode, kind: Transaction["kind"] = "expense"): ManualTransactionDraft {
   return {
     merchant: "",
     amount: 0,
-    currency: "TRY",
+    currency: localCurrency,
     category: kind === "income" ? "Other" : "Supermarket",
     kind,
     date: new Date().toISOString().slice(0, 10),
@@ -133,6 +137,9 @@ export function DashboardScreen({
   categoryBreakdown,
   monthlyTrend,
   recentTransactions,
+  displayCurrency,
+  exchangeRates,
+  balanceShift,
   insights,
   isAndroidNative,
   goalProgress,
@@ -145,6 +152,9 @@ export function DashboardScreen({
   categoryBreakdown: ReturnType<typeof buildCategoryBreakdown>;
   monthlyTrend: ReturnType<typeof buildMonthlyTrend>;
   recentTransactions: Transaction[];
+  displayCurrency: string;
+  exchangeRates: ExchangeRateSnapshot | null;
+  balanceShift: { latestMonth: string | null; inflationPct: number; purchasingPowerShiftPct: number; isIncrease: boolean } | null;
   insights: string[];
   isAndroidNative: boolean;
   goalProgress: number;
@@ -163,26 +173,41 @@ export function DashboardScreen({
     <div className="screen-stack screen-stack--dashboard">
       <section className="balance-card">
         <span className="balance-card__label">Total Balance</span>
-        <strong className="balance-card__amount">{formatMoney(totalBalance)}</strong>
+        <strong className="balance-card__amount">{formatMoney(totalBalance, summary.currency)}</strong>
+        {balanceShift ? (
+          <div className="balance-card__impact">
+            <img
+              className="balance-card__impact-icon"
+              src={balanceShift.isIncrease ? "/inflation-increase.png" : "/inflation-decrease.png"}
+              alt=""
+              aria-hidden="true"
+            />
+            <span className={balanceShift.isIncrease ? "positive" : "negative"}>
+              {balanceShift.purchasingPowerShiftPct >= 0 ? "+" : ""}
+              {balanceShift.purchasingPowerShiftPct.toFixed(1)}%
+            </span>
+            <small>{balanceShift.latestMonth ? `Purchasing power vs. ${balanceShift.latestMonth}` : "Latest monthly inflation effect"}</small>
+          </div>
+        ) : null}
         <div className="balance-card__split">
           <div className="balance-card__item">
             <span>Income</span>
-            <strong>{formatMoney(summary.totalIncome)}</strong>
+            <strong>{formatMoney(summary.totalIncome, summary.currency)}</strong>
           </div>
           <div className="balance-card__item">
             <span>Expenses</span>
-            <strong>{formatMoney(summary.totalExpenses)}</strong>
+            <strong>{formatMoney(summary.totalExpenses, summary.currency)}</strong>
           </div>
         </div>
       </section>
 
       <section className="metric-grid metric-grid--dashboard">
-        <MetricCard icon={Wallet} label="Cash Flow" value={formatMoney(summary.cashFlow)} hint="Net movement this cycle" tone="sky" />
+        <MetricCard icon={Wallet} label="Cash Flow" value={formatMoney(summary.cashFlow, summary.currency)} hint="Net movement this cycle" tone="sky" />
         <MetricCard
           icon={PiggyBank}
           label="Savings"
           value={formatPercent(summary.savingsRate)}
-          hint={`${formatMoney(safeSavings)} ready to protect`}
+          hint={`${formatMoney(safeSavings, summary.currency)} ready to protect`}
           tone="mint"
         />
       </section>
@@ -221,7 +246,7 @@ export function DashboardScreen({
               {categoryChartMode === "pie" ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
+                    <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value), summary.currency)} />
                     <Pie
                       data={categoryBreakdown}
                       dataKey="amount"
@@ -241,7 +266,7 @@ export function DashboardScreen({
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={categoryBreakdown} layout="vertical" margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
-                    <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
+                    <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value), summary.currency)} />
                     <XAxis type="number" hide />
                     <YAxis
                       type="category"
@@ -268,7 +293,7 @@ export function DashboardScreen({
                     <span className="category-legend__dot" style={{ background: entry.color }} />
                     <span>{entry.category}</span>
                   </div>
-                  <strong>{formatMoney(entry.amount)}</strong>
+                  <strong>{formatMoney(entry.amount, summary.currency)}</strong>
                 </div>
               ))}
             </div>
@@ -336,17 +361,17 @@ export function DashboardScreen({
                       <Icon size={16} />
                     </div>
                     <div>
-                      <strong>{transaction.merchant}</strong>
-                      <span>
-                        {formatDateLabel(transaction.date)} - {transaction.category}
-                      </span>
-                    </div>
-                    <strong className={transaction.kind === "income" ? "positive" : "negative"}>
-                      {transaction.kind === "income" ? "+" : "-"}
-                      {formatMoney(transaction.amount, transaction.currency)}
-                    </strong>
+                    <strong>{transaction.merchant}</strong>
+                    <span>
+                      {formatDateLabel(transaction.date)} - {transaction.category}
+                    </span>
                   </div>
-                );
+                  <strong className={transaction.kind === "income" ? "positive" : "negative"}>
+                    {transaction.kind === "income" ? "+" : "-"}
+                    {formatMoney(convertTransactionAmount(transaction, displayCurrency, exchangeRates), displayCurrency)}
+                  </strong>
+                </div>
+              );
               })}
             </div>
           ) : (
@@ -384,6 +409,8 @@ export function DashboardScreen({
 
 export function TransactionsScreen({
   transactions,
+  displayCurrency,
+  exchangeRates,
   isAndroidNative,
   isImportingNativeSms,
   onAddManualTransaction,
@@ -393,6 +420,8 @@ export function TransactionsScreen({
   onSetScreen,
 }: {
   transactions: Transaction[];
+  displayCurrency: string;
+  exchangeRates: ExchangeRateSnapshot | null;
   isAndroidNative: boolean;
   isImportingNativeSms: boolean;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
@@ -404,12 +433,17 @@ export function TransactionsScreen({
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
-  const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft());
-  const [selectedManualTileId, setSelectedManualTileId] = useState(() => getManualTileIdForCategory(createManualDraft().category));
+  const currencyChoices = getCurrencyChoices(displayCurrency);
+  const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft(displayCurrency));
+  const [selectedManualTileId, setSelectedManualTileId] = useState(() => getManualTileIdForCategory(createManualDraft(displayCurrency).category));
   const [editingMerchantId, setEditingMerchantId] = useState<string | null>(null);
   const [merchantDraft, setMerchantDraft] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const manualAmountDisplay = manualDraft.amount > 0 ? formatMoney(manualDraft.amount, manualDraft.currency) : formatMoney(0, manualDraft.currency);
+
+  useEffect(() => {
+    setManualDraft((current) => (current.amount > 0 || current.merchant.trim() ? current : createManualDraft(displayCurrency, current.kind)));
+  }, [displayCurrency]);
 
   function startMerchantEdit(transaction: Transaction) {
     setEditingCategoryId(null);
@@ -603,9 +637,11 @@ export function TransactionsScreen({
                 }))
               }
             >
-              <option value="TRY">TRY</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
+              {currencyChoices.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
             </select>
           </label>
         </div>
@@ -617,8 +653,8 @@ export function TransactionsScreen({
             onClick={() => {
               const saved = onAddManualTransaction(manualDraft);
               if (saved) {
-                setManualDraft(createManualDraft(manualDraft.kind));
-                setSelectedManualTileId(getManualTileIdForCategory(createManualDraft(manualDraft.kind).category));
+                setManualDraft(createManualDraft(displayCurrency, manualDraft.kind));
+                setSelectedManualTileId(getManualTileIdForCategory(createManualDraft(displayCurrency, manualDraft.kind).category));
               }
             }}
           >
@@ -722,8 +758,15 @@ export function TransactionsScreen({
                       )}
                     </td>
                     <td className={transaction.kind === "income" ? "positive" : "negative"}>
-                      {transaction.kind === "income" ? "+" : "-"}
-                      {formatMoney(transaction.amount, transaction.currency)}
+                      <div className="ledger-amount">
+                        <strong>
+                          {transaction.kind === "income" ? "+" : "-"}
+                          {formatMoney(convertTransactionAmount(transaction, displayCurrency, exchangeRates), displayCurrency)}
+                        </strong>
+                        {transaction.currency !== displayCurrency ? (
+                          <span className="ledger-amount__meta">{formatMoney(transaction.amount, transaction.currency)} original</span>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       {editingCategoryId === transaction.id ? (
@@ -847,8 +890,8 @@ export function AnalysisScreen({
             <BarChart data={chartData}>
               <CartesianGrid stroke="rgba(255,253,2,0.12)" vertical={false} />
               <XAxis dataKey="label" {...chartAxisProps} />
-              <YAxis {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
-              <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value)), "Spend"]} />
+              <YAxis {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value), summary.currency)} />
+              <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value), summary.currency), "Spend"]} />
               <Bar dataKey="value" radius={[10, 10, 0, 0]}>
                 {chartData.map((entry, index) => (
                   <Cell
@@ -885,7 +928,7 @@ export function AnalysisScreen({
                         <span>{formatPercent(entry.share)} of total</span>
                       </div>
                       <div className="breakdown-row__amount">
-                        <strong>{formatMoney(entry.amount)}</strong>
+                        <strong>{formatMoney(entry.amount, summary.currency)}</strong>
                         <span className={entry.share > 30 ? "negative" : "positive"}>{entry.share > 30 ? "High" : "Stable"}</span>
                       </div>
                     </div>
@@ -913,6 +956,7 @@ export function SmartSaveScreen({
   convertedSavings,
   projection,
   targetCurrency,
+  exchangeRates,
   smartSaveGoal,
   onUpdateGoal,
   onUpdateTargetCurrency,
@@ -923,23 +967,24 @@ export function SmartSaveScreen({
   protectedSavings: number;
   convertedSavings: number;
   projection: ReturnType<typeof projectSavings>;
-  targetCurrency: CurrencyCode;
+  targetCurrency: StableCurrencyCode;
+  exchangeRates: ExchangeRateSnapshot | null;
   smartSaveGoal: number;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: CurrencyCode) => void;
+  onUpdateTargetCurrency: (value: StableCurrencyCode) => void;
 }) {
   const projectedYear = projection[projection.length - 1];
-  const projectionFiveYears = projectedYear.tryValue + summary.cashFlow * 48;
+  const projectionFiveYears = projectedYear.baseValue + summary.cashFlow * 48;
   const [manualAmount, setManualAmount] = useState(String(Math.max(200, Math.round(protectedSavings || 200))));
   const manualNumber = Number(manualAmount);
-  const manualConverted = Number.isFinite(manualNumber) ? convertCurrency(manualNumber, targetCurrency) : 0;
+  const manualConverted = Number.isFinite(manualNumber) ? convertCurrency(manualNumber, targetCurrency, summary.currency, exchangeRates) : 0;
 
   return (
     <div className="screen-stack">
       <section className="hero-strip panel">
         <div className="hero-strip__copy">
           <p className="eyebrow">Value protection</p>
-          <h2>{formatMoney(safeSavings)} available to protect</h2>
+          <h2>{formatMoney(safeSavings, summary.currency)} available to protect</h2>
           <p>
             Smart Save+ simulates moving spare cash into stable currency buckets so savings are less exposed to local
             currency swings.
@@ -952,7 +997,7 @@ export function SmartSaveScreen({
           </div>
           <div className="summary-chip summary-chip--accent">
             <span>Protected value</span>
-            <strong>{formatMoney(protectedSavings)}</strong>
+            <strong>{formatMoney(protectedSavings, summary.currency)}</strong>
           </div>
         </div>
       </section>
@@ -962,7 +1007,7 @@ export function SmartSaveScreen({
           <div className="stack">
             <div className="converter-grid">
               <label className="field">
-                <span>Amount in TL</span>
+                <span>Amount in {summary.currency}</span>
                 <input
                   className="input"
                   type="number"
@@ -974,7 +1019,7 @@ export function SmartSaveScreen({
               </label>
               <label className="field">
                 <span>Target currency</span>
-                <select className="input" value={targetCurrency} onChange={(event) => onUpdateTargetCurrency(event.target.value as CurrencyCode)}>
+                <select className="input" value={targetCurrency} onChange={(event) => onUpdateTargetCurrency(event.target.value as StableCurrencyCode)}>
                   {targetCurrencies.map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
@@ -986,9 +1031,7 @@ export function SmartSaveScreen({
 
             <div className="converter-result">
               <span>Estimated value</span>
-              <strong>
-                {manualConverted.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {targetCurrency}
-              </strong>
+              <strong>{formatMoney(manualConverted, targetCurrency)}</strong>
               <p>No real money transfer occurs in this prototype.</p>
             </div>
 
@@ -1009,9 +1052,9 @@ export function SmartSaveScreen({
             <LineChart data={projection}>
                 <CartesianGrid stroke="rgba(255,253,2,0.12)" vertical={false} />
                 <XAxis dataKey="label" stroke="#d5cc8a" {...chartAxisProps} />
-                <YAxis stroke="#d5cc8a" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value))} />
-                <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value)), "Projected value"]} />
-                <Line type="monotone" dataKey="tryValue" stroke="#fffd02" strokeWidth={3} dot={false} />
+                <YAxis stroke="#d5cc8a" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value), summary.currency)} />
+                <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value), summary.currency), "Projected value"]} />
+                <Line type="monotone" dataKey="baseValue" stroke="#fffd02" strokeWidth={3} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </ChartFrame>
@@ -1022,7 +1065,7 @@ export function SmartSaveScreen({
         <Panel title="Goal controls" subtitle="Tune the monthly savings objective for the app.">
           <div className="stack">
             <label className="field">
-              <span>Goal amount (TL)</span>
+              <span>Goal amount ({summary.currency})</span>
               <input
                 className="input"
                 type="range"
@@ -1035,7 +1078,7 @@ export function SmartSaveScreen({
             </label>
             <div className="range-value-row">
               <span>Current goal</span>
-              <strong>{formatMoney(smartSaveGoal)}</strong>
+              <strong>{formatMoney(smartSaveGoal, summary.currency)}</strong>
             </div>
             <div className="goal-progress">
               <span style={{ width: `${goalProgress}%` }} />
@@ -1047,22 +1090,19 @@ export function SmartSaveScreen({
           <div className="summary-grid">
             <div className="summary-card">
               <span>Current savings</span>
-              <strong>{formatMoney(safeSavings)}</strong>
+              <strong>{formatMoney(safeSavings, summary.currency)}</strong>
             </div>
             <div className="summary-card">
               <span>Protected now</span>
-              <strong>{formatMoney(protectedSavings)}</strong>
+              <strong>{formatMoney(protectedSavings, summary.currency)}</strong>
             </div>
             <div className="summary-card">
               <span>Converted now</span>
-              <strong>
-                {convertedSavings.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
-                {targetCurrency}
-              </strong>
+              <strong>{formatMoney(convertedSavings, targetCurrency)}</strong>
             </div>
             <div className="summary-card">
               <span>5-year outlook</span>
-              <strong>{formatMoney(projectionFiveYears)}</strong>
+              <strong>{formatMoney(projectionFiveYears, summary.currency)}</strong>
             </div>
           </div>
         </Panel>
@@ -1462,11 +1502,11 @@ export function ProfileScreen({
   onSignOut,
   onDeleteAccount,
 }: {
-  session: { email: string; name: string; avatarUrl: string | null; mode: "cloud" | "demo" };
+  session: { email: string; name: string; avatarUrl: string | null; countryCode: string; countryName: string; localCurrency: string; mode: "cloud" | "demo" };
   isSavingProfile: boolean;
   isUpdatingPassword: boolean;
   isDeletingAccount: boolean;
-  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string }) => Promise<boolean>;
+  onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
@@ -1476,6 +1516,7 @@ export function ProfileScreen({
   const [nameInput, setNameInput] = useState(session.name);
   const [emailInput, setEmailInput] = useState(session.email);
   const [avatarUrlInput, setAvatarUrlInput] = useState(session.avatarUrl ?? "");
+  const [countryCodeInput, setCountryCodeInput] = useState(session.countryCode);
   const [passwordInput, setPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
   const [confirmAction, setConfirmAction] = useState<"signout" | "delete" | null>(null);
@@ -1487,7 +1528,8 @@ export function ProfileScreen({
     setNameInput(session.name);
     setEmailInput(session.email);
     setAvatarUrlInput(session.avatarUrl ?? "");
-  }, [session.avatarUrl, session.email, session.name]);
+    setCountryCodeInput(session.countryCode);
+  }, [session.avatarUrl, session.countryCode, session.email, session.name]);
 
   async function handlePasswordSave() {
     if (!canManageAuth) {
@@ -1576,8 +1618,8 @@ export function ProfileScreen({
                 <strong>{canManageAuth ? "Cloud account" : "Demo session"}</strong>
               </div>
               <div className="summary-chip summary-chip--accent">
-                <span>Sync</span>
-                <strong>{canManageAuth ? "Supabase active" : "Local preview"}</strong>
+                <span>Locale</span>
+                <strong>{session.localCurrency} · {session.countryName}</strong>
               </div>
             </div>
           </div>
@@ -1595,6 +1637,17 @@ export function ProfileScreen({
               <label className="field">
                 <span>Email</span>
                 <input className="input" type="email" value={emailInput} onChange={(event) => setEmailInput(event.target.value)} />
+              </label>
+
+              <label className="field">
+                <span>Country</span>
+                <select className="input" value={countryCodeInput} onChange={(event) => setCountryCodeInput(event.target.value)}>
+                  {getCountryOptions().map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.name} · {country.currency}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
 
@@ -1616,7 +1669,7 @@ export function ProfileScreen({
               <button
                 className="button button--primary"
                 type="button"
-                onClick={() => void onSaveProfileDetails({ name: nameInput, email: emailInput, avatarUrl: avatarUrlInput })}
+                onClick={() => void onSaveProfileDetails({ name: nameInput, email: emailInput, avatarUrl: avatarUrlInput, countryCode: countryCodeInput })}
                 disabled={isSavingProfile}
               >
                 <UserRound size={16} />

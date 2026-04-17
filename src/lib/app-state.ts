@@ -1,4 +1,5 @@
-import type { CurrencyCode, ScreenKey, Transaction } from "../types";
+import type { CurrencyCode, ScreenKey, StableCurrencyCode, Transaction } from "../types";
+import { normalizeCurrencyCode } from "./exchange-rates";
 
 const DEVICE_STATE_KEY = "smartbudget-device-state-v2";
 
@@ -12,7 +13,7 @@ export type DeviceState = {
 export type CloudState = {
   transactions: Transaction[];
   smartSaveGoal: number;
-  targetCurrency: CurrencyCode;
+  targetCurrency: StableCurrencyCode;
 };
 
 export function createDefaultDeviceState(): DeviceState {
@@ -76,7 +77,7 @@ export function normalizeCloudState(value: unknown): CloudState {
           .filter((transaction): transaction is Transaction => transaction !== null)
       : [],
     smartSaveGoal: typeof parsed.smartSaveGoal === "number" ? parsed.smartSaveGoal : DEFAULT_SMART_SAVE_GOAL,
-    targetCurrency: parsed.targetCurrency === "USD" || parsed.targetCurrency === "EUR" ? parsed.targetCurrency : "USD",
+    targetCurrency: parsed.targetCurrency === "EUR" ? "EUR" : "USD",
   };
 }
 
@@ -115,7 +116,7 @@ function normalizeTransaction(value: unknown): Transaction | null {
     return null;
   }
 
-  const currency = parsed.currency === "USD" || parsed.currency === "EUR" ? parsed.currency : "TRY";
+  const currency = normalizeCurrencyCode(typeof parsed.currency === "string" ? parsed.currency : "TRY", "TRY");
   const category =
     parsed.category === "Supermarket" ||
     parsed.category === "Transport" ||
