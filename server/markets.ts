@@ -26,14 +26,16 @@ const RECOMMENDATION_HORIZONS = [
   { horizon: "years", horizonLabel: "Next 1 year", period: "1y" },
 ] as const;
 
-const DISCOVERY_LIMITS = {
-  moversPerMarket: 12,
-  catalogPerMarket: 8,
-  bonds: 12,
-  batchSize: 8,
-  candidateCacheMs: 15 * 60 * 1000,
-  seriesCacheMs: 15 * 60 * 1000,
-};
+const PLAN_SAFE_TWELVE_ASSETS = [
+  { symbol: "AAPL", name: "Apple", category: "Large Cap Equity" },
+  { symbol: "MSFT", name: "Microsoft", category: "Large Cap Equity" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "ETF" },
+  { symbol: "QQQ", name: "Invesco QQQ", category: "ETF" },
+  { symbol: "BTC/USD", name: "Bitcoin", category: "Crypto" },
+  { symbol: "ETH/USD", name: "Ethereum", category: "Crypto" },
+  { symbol: "AGG", name: "iShares Core U.S. Aggregate Bond ETF", category: "Bond ETF" },
+  { symbol: "FXAIX", name: "Fidelity 500 Index Fund", category: "Mutual Fund" },
+] as const;
 
 const LEGACY_TRACKED_ASSETS = [
   { symbol: "BTC-USD", name: "Bitcoin", category: "Crypto" },
@@ -47,22 +49,12 @@ const LEGACY_TRACKED_ASSETS = [
   { symbol: "GLD", name: "SPDR Gold Shares", category: "Commodity ETF" },
 ] as const;
 
-const CORE_TWELVE_ASSETS = [
-  { symbol: "AAPL", name: "Apple", category: "Large Cap Equity", type: "Common Stock", market: "stocks" },
-  { symbol: "MSFT", name: "Microsoft", category: "Large Cap Equity", type: "Common Stock", market: "stocks" },
-  { symbol: "NVDA", name: "NVIDIA", category: "Growth Equity", type: "Common Stock", market: "stocks" },
-  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "ETF", type: "ETF", market: "etf" },
-  { symbol: "QQQ", name: "Invesco QQQ", category: "ETF", type: "ETF", market: "etf" },
-  { symbol: "VTI", name: "Vanguard Total Stock Market ETF", category: "ETF", type: "ETF", market: "etf" },
-  { symbol: "BTC/USD", name: "Bitcoin", category: "Crypto", type: "Digital Currency", market: "crypto" },
-  { symbol: "ETH/USD", name: "Ethereum", category: "Crypto", type: "Digital Currency", market: "crypto" },
-  { symbol: "SOL/USD", name: "Solana", category: "Crypto", type: "Digital Currency", market: "crypto" },
-  { symbol: "AGG", name: "iShares Core U.S. Aggregate Bond ETF", category: "Bond ETF", type: "ETF", market: "etf" },
-  { symbol: "TLT", name: "iShares 20+ Year Treasury Bond ETF", category: "Bond ETF", type: "ETF", market: "etf" },
-  { symbol: "FXAIX", name: "Fidelity 500 Index Fund", category: "Mutual Fund", type: "Mutual Fund", market: "mutual_funds" },
-] as const;
-
-type MarketKey = "stocks" | "etf" | "mutual_funds" | "crypto" | "bond";
+type TwelveAssetDefinition = {
+  provider: "twelve";
+  symbol: string;
+  name: string;
+  category: string;
+};
 
 type LegacyAssetDefinition = {
   provider: "legacy";
@@ -71,18 +63,7 @@ type LegacyAssetDefinition = {
   category: string;
 };
 
-type TwelveAssetDefinition = {
-  provider: "twelve";
-  symbol: string;
-  name: string;
-  category: string;
-  type?: string;
-  market: MarketKey;
-  exchange?: string;
-  country?: string;
-};
-
-type AssetDefinition = LegacyAssetDefinition | TwelveAssetDefinition;
+type AssetDefinition = TwelveAssetDefinition | LegacyAssetDefinition;
 
 type YahooChartResponse = {
   chart?: {
@@ -96,9 +77,6 @@ type YahooChartResponse = {
         quote?: Array<{ close?: Array<number | null> }>;
       };
     }>;
-    error?: {
-      description?: string;
-    } | null;
   };
 };
 
@@ -117,8 +95,7 @@ type AssetSeries = {
 
 type GenericRecord = Record<string, unknown>;
 
-let candidateUniverseCache: { expiresAt: number; candidates: AssetDefinition[] } | null = null;
-const priceSeriesCache = new Map<string, { expiresAt: number; series: AssetSeries }>();
+let priceSeriesCache: { expiresAt: number; seriesBySymbol: Map<string, AssetSeries>; provider: "twelve" | "legacy" } | null = null;
 
 export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number): Promise<WhatIfScenario> {
   const normalizedAmount = Number(amount);
@@ -132,14 +109,14 @@ export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number):
     throw new Error("Simulation amount must be greater than zero.");
   }
 
-  const assets = await loadAssetPerformances(period, normalizedAmount);
+  const { provider, seriesBySymbol } = await loadPlanSafeSeries();
+  const assets = buildWhatIfPerformanceForPeriod(seriesBySymbol, period, normalizedAmount);
 
   if (assets.length === 0) {
     throw new Error("Market data is unavailable right now.");
   }
 
   const bestAsset = assets[0];
-  const isProviderBacked = Boolean(twelveDataApiKey);
 
   return {
     period,
@@ -149,9 +126,10 @@ export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number):
     endDate: bestAsset.endDate,
     bestAsset,
     assets,
-    disclaimer: isProviderBacked
-      ? "This compares the strongest performer in SmartBudget's current Twelve Data market screen across multiple asset classes. Taxes, fees, and FX slippage are excluded."
-      : "This compares a fallback market basket and excludes taxes, fees, and FX slippage.",
+    disclaimer:
+      provider === "twelve"
+        ? "This compares the strongest performer in SmartBudget's plan-safe live market screen. Taxes, fees, and FX slippage are excluded."
+        : "This compares a fallback market basket and excludes taxes, fees, and FX slippage.",
   };
 }
 
@@ -165,7 +143,8 @@ export async function buildInvestmentRecommendations(input: {
     throw new Error("A positive investable balance is required for asset suggestions.");
   }
 
-  const market = await loadMarketSnapshots();
+  const { provider, seriesBySymbol } = await loadPlanSafeSeries();
+  const market = buildMarketSnapshots(seriesBySymbol);
 
   if (market.length === 0) {
     throw new Error("Live market suggestions are unavailable right now.");
@@ -191,242 +170,166 @@ export async function buildInvestmentRecommendations(input: {
     suggestions,
     market,
     disclaimer:
-      twelveDataApiKey
-        ? "These are scenario estimates based on SmartBudget's live Twelve Data screen across stocks, ETFs, mutual funds, crypto, and bond instruments. They are not guaranteed returns and do not include taxes, fees, or slippage."
+      provider === "twelve"
+        ? "These are scenario estimates based on SmartBudget's plan-safe Twelve Data screen across equities, ETFs, crypto, bonds, and funds. They are not guaranteed returns and do not include taxes, fees, or slippage."
         : "These are scenario estimates based on a fallback market screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
   };
 }
 
-async function loadAssetPerformances(period: WhatIfPeriod, amount: number) {
-  const universe = await resolveAssetUniverse();
-  const settled = await mapInBatches(universe, DISCOVERY_LIMITS.batchSize, async (asset) =>
-    buildWhatIfAssetPerformance(await fetchAssetSeries(asset), period, amount),
-  );
+export async function buildMarketInsights(input: {
+  amount: number;
+  summary: Pick<FinancialSummary, "healthScore" | "savingsRate" | "cashFlow" | "netWorth">;
+}) {
+  const { provider, seriesBySymbol } = await loadPlanSafeSeries();
+  const market = buildMarketSnapshots(seriesBySymbol);
 
-  return settled
-    .filter((entry): entry is PromiseFulfilledResult<WhatIfAssetPerformance> => entry.status === "fulfilled")
-    .map((entry) => entry.value)
-    .sort((left, right) => right.returnPct - left.returnPct);
-}
-
-async function loadMarketSnapshots() {
-  const universe = await resolveAssetUniverse();
-  const settled = await mapInBatches(universe, DISCOVERY_LIMITS.batchSize, async (asset) =>
-    fetchMarketSnapshot(asset),
-  );
-
-  return settled
-    .filter((entry): entry is PromiseFulfilledResult<MarketAssetSnapshot> => entry.status === "fulfilled")
-    .map((entry) => entry.value)
-    .sort((left, right) => right.returns["3m"] - left.returns["3m"]);
-}
-
-async function resolveAssetUniverse(): Promise<AssetDefinition[]> {
-  if (twelveDataApiKey) {
-    if (candidateUniverseCache && candidateUniverseCache.expiresAt > Date.now()) {
-      return candidateUniverseCache.candidates;
-    }
-
-    const discovered = await discoverTwelveDataUniverse();
-
-    if (discovered.length > 0) {
-      candidateUniverseCache = {
-        expiresAt: Date.now() + DISCOVERY_LIMITS.candidateCacheMs,
-        candidates: discovered,
-      };
-      return discovered;
-    }
+  if (market.length === 0) {
+    throw new Error("Live market suggestions are unavailable right now.");
   }
 
-  return LEGACY_TRACKED_ASSETS.map((asset) => ({
-    provider: "legacy" as const,
-    ...asset,
-  }));
-}
-
-async function discoverTwelveDataUniverse(): Promise<AssetDefinition[]> {
-  const [stockMovers, etfMovers, fundMovers, cryptoMovers, stockCatalog, etfCatalog, fundCatalog, cryptoCatalog, bondCatalog] =
-    await Promise.allSettled([
-      fetchTwelveMarketMovers("stocks", DISCOVERY_LIMITS.moversPerMarket),
-      fetchTwelveMarketMovers("etf", DISCOVERY_LIMITS.moversPerMarket),
-      fetchTwelveMarketMovers("mutual_funds", DISCOVERY_LIMITS.moversPerMarket),
-      fetchTwelveMarketMovers("crypto", DISCOVERY_LIMITS.moversPerMarket),
-      fetchTwelveCatalog("stocks", DISCOVERY_LIMITS.catalogPerMarket),
-      fetchTwelveCatalog("etfs", DISCOVERY_LIMITS.catalogPerMarket),
-      fetchTwelveCatalog("funds", DISCOVERY_LIMITS.catalogPerMarket),
-      fetchTwelveCatalog("cryptocurrencies", DISCOVERY_LIMITS.catalogPerMarket),
-      fetchTwelveBonds(DISCOVERY_LIMITS.bonds),
-    ]);
-
-  const discovered = dedupeAssetDefinitions([
-    ...normalizeSettledValue(stockMovers),
-    ...normalizeSettledValue(etfMovers),
-    ...normalizeSettledValue(fundMovers),
-    ...normalizeSettledValue(cryptoMovers),
-    ...normalizeSettledValue(stockCatalog),
-    ...normalizeSettledValue(etfCatalog),
-    ...normalizeSettledValue(fundCatalog),
-    ...normalizeSettledValue(cryptoCatalog),
-    ...normalizeSettledValue(bondCatalog),
-    ...CORE_TWELVE_ASSETS.map((asset) => ({
-      provider: "twelve" as const,
-      ...asset,
-    })),
-  ]);
-
-  return discovered.slice(0, 80);
-}
-
-async function fetchTwelveMarketMovers(market: Exclude<MarketKey, "bond">, limit: number) {
-  const payload = await fetchTwelveJson(`/market_movers/${market}`, {
-    direction: "gainers",
-    outputsize: String(limit),
+  const amount = Number.isFinite(input.amount) && input.amount > 0 ? input.amount : 100;
+  const aiSelections = await generateInvestmentSelections({
+    amount,
+    summary: input.summary,
+    market,
   });
 
-  return normalizeTwelveCandidates(extractRecordArray(payload), market);
-}
-
-async function fetchTwelveCatalog(endpoint: "stocks" | "etfs" | "funds" | "cryptocurrencies", limit: number) {
-  const payload = await fetchTwelveJson(`/${endpoint}`, {
-    outputsize: String(limit),
-    page: "1",
+  const suggestions = buildRecommendationSuggestions({
+    amount,
+    market,
+    summary: input.summary,
+    aiSelections,
   });
 
-  const market = endpoint === "stocks" ? "stocks" : endpoint === "etfs" ? "etf" : endpoint === "funds" ? "mutual_funds" : "crypto";
-  return normalizeTwelveCandidates(extractRecordArray(payload), market);
-}
-
-async function fetchTwelveBonds(limit: number) {
-  const payload = await fetchTwelveJson("/bonds", {
-    outputsize: String(limit),
-    page: "1",
-    country: "United States",
-  });
-
-  return normalizeTwelveCandidates(extractRecordArray(payload), "bond");
-}
-
-function normalizeTwelveCandidates(records: GenericRecord[], market: MarketKey): TwelveAssetDefinition[] {
-  const normalized: Array<TwelveAssetDefinition | null> = records.map((record) => {
-      const symbol = readString(record, ["symbol", "ticker"]);
-      if (!symbol) {
-        return null;
-      }
-
-      const exchange = readString(record, ["exchange", "mic_code"]);
-      const country = readString(record, ["country"]);
-      const name =
-        readString(record, ["name", "instrument_name"]) ||
-        buildTwelveDisplayName(record, market, symbol);
-      const type = readString(record, ["type"]) || getDefaultTypeForMarket(market);
-
-      return {
-        provider: "twelve" as const,
-        symbol,
-        name,
-        category: getCategoryForRecord(record, market),
-        type,
-        market,
-        exchange,
-        country,
-      };
-    });
-
-  return normalized.filter((asset): asset is TwelveAssetDefinition => asset !== null);
-}
-
-function buildTwelveDisplayName(record: GenericRecord, market: MarketKey, fallbackSymbol: string) {
-  if (market === "crypto") {
-    const base = readString(record, ["currency_base"]);
-    const quote = readString(record, ["currency_quote"]);
-
-    if (base && quote) {
-      return `${base} / ${quote}`;
-    }
-  }
-
-  return fallbackSymbol;
-}
-
-function getDefaultTypeForMarket(market: MarketKey) {
-  switch (market) {
-    case "stocks":
-      return "Common Stock";
-    case "etf":
-      return "ETF";
-    case "mutual_funds":
-      return "Mutual Fund";
-    case "crypto":
-      return "Digital Currency";
-    case "bond":
-      return "Bond";
-    default:
-      return undefined;
-  }
-}
-
-function getCategoryForRecord(record: GenericRecord, market: MarketKey) {
-  const explicitType = readString(record, ["type"]);
-
-  if (market === "crypto") {
-    return "Crypto";
-  }
-
-  if (market === "bond") {
-    return explicitType || "Bond";
-  }
-
-  if (market === "etf") {
-    return explicitType || "ETF";
-  }
-
-  if (market === "mutual_funds") {
-    return explicitType || "Mutual Fund";
-  }
-
-  return explicitType || "Common Stock";
-}
-
-async function fetchAssetSeries(asset: AssetDefinition): Promise<AssetSeries> {
-  return asset.provider === "twelve" ? fetchTwelveAssetSeries(asset) : fetchYahooAssetSeries(asset);
-}
-
-async function fetchTwelveAssetSeries(asset: TwelveAssetDefinition): Promise<AssetSeries> {
-  const cacheKey = `twelve:${asset.symbol}:${asset.type ?? ""}`;
-  const cached = priceSeriesCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.series;
-  }
-
-  const payload = await fetchTwelveJson("/time_series", {
-    symbol: asset.symbol,
-    interval: "1day",
-    outputsize: "390",
-    ...(asset.type ? { type: asset.type } : {}),
-  });
-
-  const meta = isRecord(payload.meta) ? payload.meta : {};
-  const points = extractTwelvePricePoints(payload);
-
-  if (points.length < 2) {
-    throw new Error(`No time series returned for ${asset.symbol}.`);
-  }
-
-  const series: AssetSeries = {
-    symbol: asset.symbol,
-    name: asset.name,
-    category: asset.category,
-    currency: readString(meta, ["currency"]) || "USD",
-    points,
+  const whatIfByPeriod = {
+    "1m": buildScenarioTemplate(seriesBySymbol, "1m"),
+    "3m": buildScenarioTemplate(seriesBySymbol, "3m"),
+    "6m": buildScenarioTemplate(seriesBySymbol, "6m"),
+    "1y": buildScenarioTemplate(seriesBySymbol, "1y"),
   };
 
-  priceSeriesCache.set(cacheKey, {
-    expiresAt: Date.now() + DISCOVERY_LIMITS.seriesCacheMs,
-    series,
+  return {
+    generatedAt: new Date().toISOString(),
+    provider,
+    market,
+    recommendations: {
+      amount,
+      generatedAt: new Date().toISOString(),
+      source: aiSelections.length > 0 ? "ai" : "deterministic",
+      suggestions,
+      market,
+      disclaimer:
+        provider === "twelve"
+          ? "These are scenario estimates based on SmartBudget's plan-safe Twelve Data screen across equities, ETFs, crypto, bonds, and funds. They are not guaranteed returns and do not include taxes, fees, or slippage."
+          : "These are scenario estimates based on a fallback market screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
+    },
+    whatIfByPeriod,
+    disclaimer:
+      provider === "twelve"
+        ? "SmartBudget is using a plan-safe Twelve Data screen that fits the current API credit budget."
+        : "SmartBudget is using a fallback market screen because live provider data is not available right now.",
+  };
+}
+
+async function loadPlanSafeSeries(): Promise<{ provider: "twelve" | "legacy"; seriesBySymbol: Map<string, AssetSeries> }> {
+  if (priceSeriesCache && priceSeriesCache.expiresAt > Date.now()) {
+    return {
+      provider: priceSeriesCache.provider,
+      seriesBySymbol: priceSeriesCache.seriesBySymbol,
+    };
+  }
+
+  if (twelveDataApiKey) {
+    try {
+      const seriesBySymbol = await fetchTwelveBatchSeries();
+
+      if (seriesBySymbol.size > 0) {
+        priceSeriesCache = {
+          expiresAt: Date.now() + 15 * 60 * 1000,
+          seriesBySymbol,
+          provider: "twelve",
+        };
+        return {
+          provider: "twelve",
+          seriesBySymbol,
+        };
+      }
+    } catch {
+      // Fall back to the legacy universe below.
+    }
+  }
+
+  const seriesBySymbol = await fetchLegacySeries();
+  priceSeriesCache = {
+    expiresAt: Date.now() + 15 * 60 * 1000,
+    seriesBySymbol,
+    provider: "legacy",
+  };
+
+  return {
+    provider: "legacy",
+    seriesBySymbol,
+  };
+}
+
+async function fetchTwelveBatchSeries() {
+  const payload = await fetchTwelveJson("/time_series", {
+    symbol: PLAN_SAFE_TWELVE_ASSETS.map((asset) => asset.symbol).join(","),
+    interval: "1day",
+    outputsize: "390",
   });
 
-  return series;
+  const result = new Map<string, AssetSeries>();
+
+  for (const asset of PLAN_SAFE_TWELVE_ASSETS) {
+    const entry = isRecord(payload[asset.symbol]) ? (payload[asset.symbol] as GenericRecord) : null;
+
+    if (!entry) {
+      continue;
+    }
+
+    if (readString(entry, ["status"])?.toLowerCase() === "error") {
+      continue;
+    }
+
+    const meta = isRecord(entry.meta) ? entry.meta : {};
+    const points = extractTwelvePricePoints(entry);
+
+    if (points.length < 2) {
+      continue;
+    }
+
+    result.set(asset.symbol, {
+      symbol: asset.symbol,
+      name: asset.name,
+      category: asset.category,
+      currency: readString(meta, ["currency"]) || "USD",
+      points,
+    });
+  }
+
+  return result;
+}
+
+async function fetchLegacySeries() {
+  const settled = await Promise.allSettled(
+    LEGACY_TRACKED_ASSETS.map((asset) =>
+      fetchYahooAssetSeries({
+        provider: "legacy",
+        ...asset,
+      }),
+    ),
+  );
+
+  const result = new Map<string, AssetSeries>();
+
+  for (const entry of settled) {
+    if (entry.status === "fulfilled") {
+      result.set(entry.value.symbol, entry.value);
+    }
+  }
+
+  return result;
 }
 
 async function fetchYahooAssetSeries(asset: LegacyAssetDefinition): Promise<AssetSeries> {
@@ -463,23 +366,53 @@ async function fetchYahooAssetSeries(asset: LegacyAssetDefinition): Promise<Asse
   };
 }
 
-async function fetchMarketSnapshot(asset: AssetDefinition): Promise<MarketAssetSnapshot> {
-  const series = await fetchAssetSeries(asset);
-  const latest = series.points[series.points.length - 1];
+function buildMarketSnapshots(seriesBySymbol: Map<string, AssetSeries>) {
+  return [...seriesBySymbol.values()]
+    .map((series) => {
+      const latest = series.points[series.points.length - 1];
+
+      return {
+        symbol: series.symbol,
+        name: series.name,
+        category: series.category,
+        currency: series.currency,
+        currentPrice: latest.price,
+        volatilityPct: computeAnnualizedVolatilityPct(series.points),
+        returns: {
+          "1m": computeReturnPctForPeriod(series.points, "1m"),
+          "3m": computeReturnPctForPeriod(series.points, "3m"),
+          "6m": computeReturnPctForPeriod(series.points, "6m"),
+          "1y": computeReturnPctForPeriod(series.points, "1y"),
+        },
+      } satisfies MarketAssetSnapshot;
+    })
+    .sort((left, right) => right.returns["3m"] - left.returns["3m"]);
+}
+
+function buildWhatIfPerformanceForPeriod(seriesBySymbol: Map<string, AssetSeries>, period: WhatIfPeriod, amount: number) {
+  return [...seriesBySymbol.values()]
+    .map((series) => buildWhatIfAssetPerformance(series, period, amount))
+    .sort((left, right) => right.returnPct - left.returnPct);
+}
+
+function buildScenarioTemplate(seriesBySymbol: Map<string, AssetSeries>, period: WhatIfPeriod): WhatIfScenario {
+  const amount = 1;
+  const assets = buildWhatIfPerformanceForPeriod(seriesBySymbol, period, amount);
+  const bestAsset = assets[0];
+
+  if (!bestAsset) {
+    throw new Error("Market data is unavailable right now.");
+  }
 
   return {
-    symbol: series.symbol,
-    name: series.name,
-    category: series.category,
-    currency: series.currency,
-    currentPrice: latest.price,
-    volatilityPct: computeAnnualizedVolatilityPct(series.points),
-    returns: {
-      "1m": computeReturnPctForPeriod(series.points, "1m"),
-      "3m": computeReturnPctForPeriod(series.points, "3m"),
-      "6m": computeReturnPctForPeriod(series.points, "6m"),
-      "1y": computeReturnPctForPeriod(series.points, "1y"),
-    },
+    period,
+    periodLabel: PERIOD_CONFIG[period].label,
+    amount,
+    startDate: bestAsset.startDate,
+    endDate: bestAsset.endDate,
+    bestAsset,
+    assets,
+    disclaimer: "Scale the scenario amount locally without spending another provider call.",
   };
 }
 
@@ -604,7 +537,7 @@ function buildFallbackRationale(
   const stability =
     summary.cashFlow < 0 || summary.healthScore < 45
       ? "It balances upside with a tighter volatility profile for your current finances."
-      : "Its momentum is the strongest after adjusting for volatility in SmartBudget's current live market screen.";
+      : "Its momentum is the strongest after adjusting for volatility in SmartBudget's plan-safe live market screen.";
 
   return `${asset.name} leads our ${PERIOD_CONFIG[period].label} screen. ${stability}`;
 }
@@ -657,7 +590,9 @@ function buildPricePoints(prices: Array<number | null> | undefined, timestamps: 
 }
 
 function extractTwelvePricePoints(payload: GenericRecord) {
-  return extractRecordArray(payload)
+  const values = Array.isArray(payload.values) ? payload.values.filter(isRecord) : [];
+
+  return values
     .map((entry) => ({
       price: readNumber(entry, ["close", "price", "value"]),
       timestamp: parseDateToTimestamp(readString(entry, ["datetime", "date", "timestamp"])),
@@ -704,12 +639,11 @@ async function fetchTwelveJson(pathname: string, params: Record<string, string>)
   }
 
   const url = new URL(pathname, TWELVE_DATA_BASE_URL);
-  const searchParams = new URLSearchParams({
+  url.search = new URLSearchParams({
     ...params,
     apikey: twelveDataApiKey,
     format: "JSON",
-  });
-  url.search = searchParams.toString();
+  }).toString();
 
   const response = await fetch(url.toString(), {
     headers: {
@@ -727,68 +661,11 @@ async function fetchTwelveJson(pathname: string, params: Record<string, string>)
   const status = readString(payload, ["status"]);
 
   if (status?.toLowerCase() === "error") {
-    const message = readString(payload, ["message"]) || readString(payload, ["code"]) || `Twelve Data returned an error for ${pathname}.`;
+    const message = readString(payload, ["message"]) || `Twelve Data returned an error for ${pathname}.`;
     throw new Error(message);
   }
 
   return payload;
-}
-
-function extractRecordArray(payload: GenericRecord): GenericRecord[] {
-  const candidates: unknown[] = [
-    payload.data,
-    payload.values,
-    payload.result,
-  ];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate.filter(isRecord);
-    }
-
-    if (isRecord(candidate)) {
-      const nested = [candidate.data, candidate.values, candidate.result, candidate.list];
-
-      for (const entry of nested) {
-        if (Array.isArray(entry)) {
-          return entry.filter(isRecord);
-        }
-      }
-    }
-  }
-
-  return [];
-}
-
-function dedupeAssetDefinitions(assets: AssetDefinition[]) {
-  const seen = new Set<string>();
-
-  return assets.filter((asset) => {
-    const key = asset.symbol.trim().toUpperCase();
-
-    if (!key || seen.has(key)) {
-      return false;
-    }
-
-    seen.add(key);
-    return true;
-  });
-}
-
-function normalizeSettledValue<T>(result: PromiseSettledResult<T[]>) {
-  return result.status === "fulfilled" ? result.value : [];
-}
-
-async function mapInBatches<T, R>(items: T[], batchSize: number, worker: (item: T) => Promise<R>) {
-  const settled: Array<PromiseSettledResult<R>> = [];
-
-  for (let index = 0; index < items.length; index += batchSize) {
-    const batch = items.slice(index, index + batchSize);
-    const results = await Promise.allSettled(batch.map((item) => worker(item)));
-    settled.push(...results);
-  }
-
-  return settled;
 }
 
 function readString(record: GenericRecord, keys: string[]) {
@@ -805,11 +682,10 @@ function readString(record: GenericRecord, keys: string[]) {
 
 function readNumber(record: GenericRecord, keys: string[]) {
   for (const key of keys) {
-    const value = record[key];
-    const numeric = Number(value);
+    const value = Number(record[key]);
 
-    if (Number.isFinite(numeric)) {
-      return numeric;
+    if (Number.isFinite(value)) {
+      return value;
     }
   }
 

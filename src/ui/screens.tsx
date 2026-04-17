@@ -55,9 +55,11 @@ import type {
   CurrencyCode,
   FinancialSummary,
   InvestmentRecommendations,
+  MarketInsights,
   ManualTransactionDraft,
   ScreenKey,
   Transaction,
+  WhatIfAssetPerformance,
   WhatIfPeriod,
   WhatIfScenario,
 } from "../types";
@@ -1044,81 +1046,28 @@ export function AdviceScreen({
   const [whatIfPeriod, setWhatIfPeriod] = useState<WhatIfPeriod>("3m");
   const [amountInput, setAmountInput] = useState(() => formatAmountInput(defaultWhatIfAmountUsd));
   const [committedAmount, setCommittedAmount] = useState(() => normalizeWhatIfAmount(defaultWhatIfAmountUsd));
-  const [whatIfScenario, setWhatIfScenario] = useState<WhatIfScenario | null>(null);
   const [whatIfError, setWhatIfError] = useState<string | null>(null);
-  const [isLoadingWhatIf, setIsLoadingWhatIf] = useState(false);
-  const [investmentRecommendations, setInvestmentRecommendations] = useState<InvestmentRecommendations | null>(null);
+  const [marketInsights, setMarketInsights] = useState<MarketInsights | null>(null);
+  const [marketError, setMarketError] = useState<string | null>(null);
+  const [isLoadingMarketInsights, setIsLoadingMarketInsights] = useState(false);
   const [investmentError, setInvestmentError] = useState<string | null>(null);
-  const [isLoadingInvestments, setIsLoadingInvestments] = useState(false);
-
-  useEffect(() => {
-    const amount = normalizeWhatIfAmount(committedAmount);
-
-    if (amount <= 0) {
-      setWhatIfScenario(null);
-      setWhatIfError("Enter a simulation amount greater than zero.");
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadScenario() {
-      setIsLoadingWhatIf(true);
-      setWhatIfError(null);
-
-      try {
-        const response = await fetch(`/api/markets/what-if?period=${whatIfPeriod}&amount=${amount}`);
-        const payload = await response.json();
-
-        if (!response.ok) {
-          throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to load the what-if scenario.");
-        }
-
-        if (!cancelled) {
-          setWhatIfScenario(payload as WhatIfScenario);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setWhatIfScenario(null);
-          setWhatIfError(error instanceof Error ? error.message : "Unable to load the what-if scenario.");
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingWhatIf(false);
-        }
-      }
-    }
-
-    void loadScenario();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [committedAmount, whatIfPeriod]);
 
   useEffect(() => {
     const investableAmount = normalizeInvestableAmount(investableBalanceUsd);
-
-    if (investableAmount <= 0) {
-      setInvestmentRecommendations(null);
-      setInvestmentError("Build a positive protected balance first, then SmartBudget can suggest live market assets.");
-      return;
-    }
-
     let cancelled = false;
 
-    async function loadRecommendations() {
-      setIsLoadingInvestments(true);
-      setInvestmentError(null);
+    async function loadMarketInsights() {
+      setIsLoadingMarketInsights(true);
+      setMarketError(null);
 
       try {
-        const response = await fetch("/api/markets/recommendations", {
+        const response = await fetch("/api/markets/insights", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            amount: investableAmount,
+            amount: investableAmount > 0 ? investableAmount : 100,
             summary: {
               healthScore: summary.healthScore,
               savingsRate: summary.savingsRate,
@@ -1130,30 +1079,55 @@ export function AdviceScreen({
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to load live market suggestions.");
+          throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to load live market insights.");
         }
 
         if (!cancelled) {
-          setInvestmentRecommendations(payload as InvestmentRecommendations);
+          setMarketInsights(payload as MarketInsights);
         }
       } catch (error) {
         if (!cancelled) {
-          setInvestmentRecommendations(null);
-          setInvestmentError(error instanceof Error ? error.message : "Unable to load live market suggestions.");
+          setMarketInsights(null);
+          setMarketError(error instanceof Error ? error.message : "Unable to load live market insights.");
         }
       } finally {
         if (!cancelled) {
-          setIsLoadingInvestments(false);
+          setIsLoadingMarketInsights(false);
         }
       }
     }
 
-    void loadRecommendations();
+    void loadMarketInsights();
 
     return () => {
       cancelled = true;
     };
   }, [investableBalanceUsd, summary.cashFlow, summary.healthScore, summary.netWorth, summary.savingsRate]);
+
+  useEffect(() => {
+    const amount = normalizeWhatIfAmount(committedAmount);
+
+    if (amount <= 0) {
+      setWhatIfError("Enter a simulation amount greater than zero.");
+      return;
+    }
+
+    setWhatIfError(null);
+  }, [committedAmount]);
+
+  useEffect(() => {
+    if (normalizeInvestableAmount(investableBalanceUsd) <= 0) {
+      setInvestmentError("Build a positive protected balance first, then SmartBudget can suggest live market assets.");
+      return;
+    }
+
+    setInvestmentError(null);
+  }, [investableBalanceUsd]);
+
+  const investmentRecommendations: InvestmentRecommendations | null =
+    normalizeInvestableAmount(investableBalanceUsd) > 0 ? marketInsights?.recommendations ?? null : null;
+  const whatIfTemplate = marketInsights?.whatIfByPeriod[whatIfPeriod] ?? null;
+  const whatIfScenario = whatIfTemplate ? scaleWhatIfScenario(whatIfTemplate, normalizeWhatIfAmount(committedAmount)) : null;
 
   function applyWhatIfAmount() {
     const nextAmount = Number(amountInput);
@@ -1202,6 +1176,8 @@ export function AdviceScreen({
               ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")}.`
               : "No protected balance is available yet for live investment suggestions."}
           </p>
+
+          {marketInsights ? <p className="helper-copy">{marketInsights.disclaimer}</p> : null}
 
           {investmentRecommendations ? (
             <>
@@ -1259,7 +1235,8 @@ export function AdviceScreen({
             </>
           ) : null}
 
-          {isLoadingInvestments ? <div className="auth-note auth-note--signup">Loading live market suggestions...</div> : null}
+          {isLoadingMarketInsights ? <div className="auth-note auth-note--signup">Loading live market suggestions...</div> : null}
+          {marketError ? <div className="auth-note auth-note--signup">{marketError}</div> : null}
           {investmentError ? <div className="auth-note auth-note--signup">{investmentError}</div> : null}
         </div>
       </Panel>
@@ -1296,8 +1273,8 @@ export function AdviceScreen({
                 onChange={(event) => setAmountInput(event.target.value)}
               />
             </label>
-            <button className="button button--secondary" type="button" onClick={applyWhatIfAmount} disabled={isLoadingWhatIf}>
-              {isLoadingWhatIf ? "Running..." : "Run What If"}
+            <button className="button button--secondary" type="button" onClick={applyWhatIfAmount} disabled={isLoadingMarketInsights}>
+              {isLoadingMarketInsights ? "Loading..." : "Run What If"}
             </button>
           </div>
 
@@ -1384,6 +1361,7 @@ export function AdviceScreen({
             </div>
           ) : null}
 
+          {marketError ? <div className="auth-note auth-note--signup">{marketError}</div> : null}
           {whatIfError ? <div className="auth-note auth-note--signup">{whatIfError}</div> : null}
         </div>
       </Panel>
@@ -1773,4 +1751,31 @@ function getConfidenceTone(confidence: "low" | "medium" | "high"): AdviceCard["t
   }
 
   return "error";
+}
+
+function scaleWhatIfScenario(template: WhatIfScenario, amount: number): WhatIfScenario {
+  const normalizedAmount = normalizeWhatIfAmount(amount);
+  const assets = template.assets.map((asset) => scaleWhatIfAsset(asset, normalizedAmount));
+  const bestAsset = assets[0] ?? scaleWhatIfAsset(template.bestAsset, normalizedAmount);
+
+  return {
+    ...template,
+    amount: normalizedAmount,
+    bestAsset,
+    assets,
+    disclaimer: "Scenario recalculated locally from the latest market snapshot without spending another provider call.",
+  };
+}
+
+function scaleWhatIfAsset(asset: WhatIfAssetPerformance, amount: number): WhatIfAssetPerformance {
+  const normalizedAmount = normalizeWhatIfAmount(amount);
+  const currentValue = normalizedAmount * (asset.currentValue / asset.investedAmount);
+  const gain = currentValue - normalizedAmount;
+
+  return {
+    ...asset,
+    investedAmount: normalizedAmount,
+    currentValue,
+    gain,
+  };
 }

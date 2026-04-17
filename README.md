@@ -10,6 +10,8 @@ SmartBudget is a cloud-backed personal finance app for students. It combines SMS
 - Twelve Data-powered live market screening for what-if analysis and investment suggestions
 - Capacitor Android wrapper for native SMS import
 
+SmartBudget uses a plan-safe Twelve Data market screen by default so the advisor can work within lower API credit limits.
+
 ## Local Setup
 
 ```bash

@@ -109,6 +109,15 @@ export interface InvestmentRecommendations {
   disclaimer: string;
 }
 
+export interface MarketInsights {
+  generatedAt: string;
+  provider: "twelve" | "legacy";
+  market: MarketAssetSnapshot[];
+  recommendations: InvestmentRecommendations;
+  whatIfByPeriod: Record<WhatIfPeriod, WhatIfScenario>;
+  disclaimer: string;
+}
+
 export interface FinancialSummary {
   totalIncome: number;
   totalExpenses: number;
