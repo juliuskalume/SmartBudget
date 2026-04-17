@@ -2777,3 +2777,116 @@ h6 {
     min-height: 46px;
   }
 }
+
+.category-tile {
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.category-tile:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 253, 2, 0.28);
+}
+
+.category-tile--active {
+  color: #050505;
+  border-color: rgba(255, 255, 255, 0.46);
+  background: linear-gradient(180deg, #fffef0 0%, #fffd02 34%, #ffd000 100%);
+  box-shadow:
+    0 16px 28px rgba(255, 221, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    inset 0 -2px 0 rgba(122, 92, 0, 0.34);
+}
+
+.category-tile--active .category-tile__icon {
+  background: linear-gradient(180deg, #f6f8fc 0%, #dfe8f1 18%, #a9b4c7 52%, #70798a 100%);
+  color: #050505;
+}
+
+.category-tile--active span {
+  color: #050505;
+  font-weight: 800;
+}
+
+.ledger-edit-trigger {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ledger-edit-trigger strong {
+  transition: color 0.16s ease;
+}
+
+.ledger-edit-trigger:hover strong {
+  color: var(--sb-primary);
+}
+
+.ledger-edit-trigger:focus-visible,
+.category-pill--editable:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 253, 2, 0.16);
+}
+
+.ledger-edit-input {
+  min-width: 8.75rem;
+  padding: 0.62rem 0.78rem;
+  border-radius: 14px;
+  font-size: 0.86rem;
+}
+
+.ledger-edit-select {
+  min-width: 8.9rem;
+}
+
+.category-pill--editable {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease,
+    filter 0.16s ease;
+}
+
+.category-pill--editable:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.phone-nav {
+  gap: 0.42rem;
+  padding: 0.68rem 0.78rem 0.88rem;
+}
+
+.phone-nav__item {
+  min-height: 3.45rem;
+  padding: 0.72rem 0.25rem;
+  gap: 0;
+}
+
+.phone-nav__icon {
+  width: 1.6rem;
+  height: 1.6rem;
+  transition: transform 0.16s ease;
+}
+
+.phone-nav__item--active .phone-nav__icon {
+  transform: scale(1.12);
+}
+
+@media (max-width: 520px) {
+  .phone-nav {
+    padding-bottom: calc(0.95rem + env(safe-area-inset-bottom, 0px));
+  }
+}

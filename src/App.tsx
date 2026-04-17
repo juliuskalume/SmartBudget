@@ -644,6 +644,62 @@ function App() {
     flashMessage("neutral", "Transaction removed from the ledger.");
   }
 
+  function updateTransaction(id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) {
+    let changed = false;
+    let invalidMerchant = false;
+
+    setCloudState((current) => {
+      const nextTransactions = current.transactions.map((transaction) => {
+        if (transaction.id !== id) {
+          return transaction;
+        }
+
+        const nextMerchant =
+          updates.merchant === undefined
+            ? transaction.merchant
+            : updates.merchant.trim();
+
+        if (!nextMerchant) {
+          invalidMerchant = true;
+          return transaction;
+        }
+
+        const nextCategory = updates.category ?? transaction.category;
+
+        if (nextMerchant === transaction.merchant && nextCategory === transaction.category) {
+          return transaction;
+        }
+
+        changed = true;
+        return {
+          ...transaction,
+          merchant: nextMerchant,
+          category: nextCategory,
+        };
+      });
+
+      if (!changed) {
+        return current;
+      }
+
+      return {
+        ...current,
+        transactions: nextTransactions,
+      };
+    });
+
+    if (invalidMerchant) {
+      flashMessage("warning", "Merchant name cannot be empty.");
+      return false;
+    }
+
+    if (changed) {
+      setAiAdvice(null);
+    }
+
+    return true;
+  }
+
   async function refreshAdvice() {
     const fallback = buildAdvice(summary, cloudState.transactions);
     setIsRefreshingAdvice(true);
@@ -760,6 +816,7 @@ function App() {
         onRefreshAdvice={refreshAdvice}
         onImportNativeSms={handleAllowSmsAccess}
         onAddManualTransaction={addManualTransaction}
+        onUpdateTransaction={updateTransaction}
         onDeleteTransaction={deleteTransaction}
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}

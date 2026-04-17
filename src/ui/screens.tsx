@@ -79,15 +79,17 @@ const categoryIconMap = {
   Other: ShoppingBag,
 } as const;
 
+const transactionCategories: Category[] = ["Supermarket", "Transport", "Entertainment", "Bills", "Education", "Other"];
+
 const transactionCategoryTiles = [
-  { label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
-  { label: "Transport", category: "Transport" as const, icon: BusFront },
-  { label: "Shopping", category: "Other" as const, icon: ShoppingBag },
-  { label: "Bills", category: "Bills" as const, icon: Receipt },
-  { label: "Entertainment", category: "Entertainment" as const, icon: Clapperboard },
-  { label: "Health", category: "Other" as const, icon: HeartPulse },
-  { label: "Home", category: "Bills" as const, icon: House },
-  { label: "Education", category: "Education" as const, icon: GraduationCap },
+  { id: "food", label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
+  { id: "transport", label: "Transport", category: "Transport" as const, icon: BusFront },
+  { id: "shopping", label: "Shopping", category: "Other" as const, icon: ShoppingBag },
+  { id: "bills", label: "Bills", category: "Bills" as const, icon: Receipt },
+  { id: "entertainment", label: "Entertainment", category: "Entertainment" as const, icon: Clapperboard },
+  { id: "health", label: "Health", category: "Other" as const, icon: HeartPulse },
+  { id: "home", label: "Home", category: "Bills" as const, icon: House },
+  { id: "education", label: "Education", category: "Education" as const, icon: GraduationCap },
 ];
 
 function createManualDraft(kind: Transaction["kind"] = "expense"): ManualTransactionDraft {
@@ -99,6 +101,10 @@ function createManualDraft(kind: Transaction["kind"] = "expense"): ManualTransac
     kind,
     date: new Date().toISOString().slice(0, 10),
   };
+}
+
+function getManualTileIdForCategory(category: Category) {
+  return transactionCategoryTiles.find((tile) => tile.category === category)?.id ?? transactionCategoryTiles[0].id;
 }
 
 export function DashboardScreen({
@@ -313,6 +319,7 @@ export function TransactionsScreen({
   isAndroidNative,
   isImportingNativeSms,
   onAddManualTransaction,
+  onUpdateTransaction,
   onDeleteTransaction,
   onImportNativeSms,
   onSetScreen,
@@ -321,6 +328,7 @@ export function TransactionsScreen({
   isAndroidNative: boolean;
   isImportingNativeSms: boolean;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
+  onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onImportNativeSms: () => void;
   onSetScreen: (screen: ScreenKey) => void;
@@ -329,7 +337,36 @@ export function TransactionsScreen({
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
   const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft());
+  const [selectedManualTileId, setSelectedManualTileId] = useState(() => getManualTileIdForCategory(createManualDraft().category));
+  const [editingMerchantId, setEditingMerchantId] = useState<string | null>(null);
+  const [merchantDraft, setMerchantDraft] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const manualAmountDisplay = manualDraft.amount > 0 ? formatMoney(manualDraft.amount, manualDraft.currency) : formatMoney(0, manualDraft.currency);
+
+  function startMerchantEdit(transaction: Transaction) {
+    setEditingCategoryId(null);
+    setEditingMerchantId(transaction.id);
+    setMerchantDraft(transaction.merchant);
+  }
+
+  function stopMerchantEdit() {
+    setEditingMerchantId(null);
+    setMerchantDraft("");
+  }
+
+  function commitMerchantEdit(transactionId: string) {
+    const nextMerchant = merchantDraft.trim();
+    if (!onUpdateTransaction(transactionId, { merchant: nextMerchant })) {
+      return;
+    }
+
+    stopMerchantEdit();
+  }
+
+  function commitCategoryEdit(transactionId: string, nextCategory: Category) {
+    onUpdateTransaction(transactionId, { category: nextCategory });
+    setEditingCategoryId(null);
+  }
 
   const filtered = transactions.filter((transaction) => {
     const matchesQuery =
@@ -424,14 +461,17 @@ export function TransactionsScreen({
         <div className="category-tile-grid">
           {transactionCategoryTiles.map((tile) => {
             const Icon = tile.icon;
-            const active = manualDraft.category === tile.category;
+            const active = selectedManualTileId === tile.id;
 
             return (
               <button
                 className={`category-tile ${active ? "category-tile--active" : ""}`}
                 type="button"
-                key={`manual-${tile.label}-${tile.category}`}
-                onClick={() => setManualDraft((current) => ({ ...current, category: tile.category }))}
+                key={tile.id}
+                onClick={() => {
+                  setSelectedManualTileId(tile.id);
+                  setManualDraft((current) => ({ ...current, category: tile.category }));
+                }}
               >
                 <div className="category-tile__icon">
                   <Icon size={18} />
@@ -510,6 +550,7 @@ export function TransactionsScreen({
               const saved = onAddManualTransaction(manualDraft);
               if (saved) {
                 setManualDraft(createManualDraft(manualDraft.kind));
+                setSelectedManualTileId(getManualTileIdForCategory(createManualDraft(manualDraft.kind).category));
               }
             }}
           >
@@ -544,7 +585,7 @@ export function TransactionsScreen({
             <Filter size={16} />
             <select className="input" value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as Category | "all")}>
               <option value="all">All categories</option>
-              {["Supermarket", "Transport", "Entertainment", "Bills", "Education", "Other"].map((category) => (
+              {transactionCategories.map((category) => (
                 <option key={category} value={category}>
                   {category}
                 </option>
@@ -567,7 +608,7 @@ export function TransactionsScreen({
         </div>
       </Panel>
 
-      <Panel title="Ledger" subtitle="Each transaction is color-coded and auto-tagged by category.">
+      <Panel title="Ledger" subtitle="Click the merchant or category to correct any misclassified transaction details.">
         <div className="table-wrap">
           {filtered.length > 0 ? (
             <table className="table">
@@ -586,19 +627,64 @@ export function TransactionsScreen({
                   <tr key={transaction.id}>
                     <td>{formatDateLabel(transaction.date)}</td>
                     <td>
-                      <strong>{transaction.merchant}</strong>
+                      {editingMerchantId === transaction.id ? (
+                        <input
+                          className="input ledger-edit-input"
+                          type="text"
+                          value={merchantDraft}
+                          autoFocus
+                          onChange={(event) => setMerchantDraft(event.target.value)}
+                          onBlur={() => commitMerchantEdit(transaction.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              commitMerchantEdit(transaction.id);
+                            }
+
+                            if (event.key === "Escape") {
+                              event.preventDefault();
+                              stopMerchantEdit();
+                            }
+                          }}
+                        />
+                      ) : (
+                        <button className="ledger-edit-trigger" type="button" onClick={() => startMerchantEdit(transaction)}>
+                          <strong>{transaction.merchant}</strong>
+                        </button>
+                      )}
                     </td>
                     <td className={transaction.kind === "income" ? "positive" : "negative"}>
                       {transaction.kind === "income" ? "+" : "-"}
                       {formatMoney(transaction.amount, transaction.currency)}
                     </td>
                     <td>
-                      <span
-                        className="category-pill"
-                        style={{ background: `${CATEGORY_COLORS[transaction.category]}20`, color: CATEGORY_COLORS[transaction.category] }}
-                      >
-                        {transaction.category}
-                      </span>
+                      {editingCategoryId === transaction.id ? (
+                        <select
+                          className="input ledger-edit-input ledger-edit-select"
+                          value={transaction.category}
+                          autoFocus
+                          onBlur={() => setEditingCategoryId(null)}
+                          onChange={(event) => commitCategoryEdit(transaction.id, event.target.value as Category)}
+                        >
+                          {transactionCategories.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          className="category-pill category-pill--editable"
+                          type="button"
+                          onClick={() => {
+                            setEditingMerchantId(null);
+                            setEditingCategoryId(transaction.id);
+                          }}
+                          style={{ background: `${CATEGORY_COLORS[transaction.category]}20`, color: CATEGORY_COLORS[transaction.category] }}
+                        >
+                          {transaction.category}
+                        </button>
+                      )}
                     </td>
                     <td>
                       <Badge tone={transaction.source === "sms" ? "success" : "neutral"}>

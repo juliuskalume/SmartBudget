@@ -33,6 +33,7 @@ export function AppShell({
   onRefreshAdvice,
   onImportNativeSms,
   onAddManualTransaction,
+  onUpdateTransaction,
   onDeleteTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
@@ -58,6 +59,7 @@ export function AppShell({
   onRefreshAdvice: () => void;
   onImportNativeSms: () => void;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
+  onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
@@ -90,6 +92,7 @@ export function AppShell({
     onSelectScreen,
     onDeleteTransaction,
     onAddManualTransaction,
+    onUpdateTransaction,
     onUpdateGoal,
     onUpdateTargetCurrency,
     onImportNativeSms,
@@ -132,10 +135,10 @@ export function AppShell({
 
       <nav className="phone-nav" aria-label="Primary navigation">
         <NavItem label="Home" icon={Home} active={activeScreen === "dashboard"} onClick={() => onSelectScreen("dashboard")} />
-        <NavItem label="Add" icon={ReceiptText} active={activeScreen === "transactions"} onClick={() => onSelectScreen("transactions")} />
-        <NavItem label="Stats" icon={TrendingUp} active={activeScreen === "analysis"} onClick={() => onSelectScreen("analysis")} />
-        <NavItem label="Save" icon={PiggyBank} active={activeScreen === "save"} onClick={() => onSelectScreen("save")} />
-        <NavItem label="AI" icon={Lightbulb} active={activeScreen === "advice"} onClick={() => onSelectScreen("advice")} />
+        <NavItem label="Add Transaction" icon={ReceiptText} active={activeScreen === "transactions"} onClick={() => onSelectScreen("transactions")} />
+        <NavItem label="Statistics" icon={TrendingUp} active={activeScreen === "analysis"} onClick={() => onSelectScreen("analysis")} />
+        <NavItem label="Budget Safe" icon={PiggyBank} active={activeScreen === "save"} onClick={() => onSelectScreen("save")} />
+        <NavItem label="AI Coach" icon={Lightbulb} active={activeScreen === "advice"} onClick={() => onSelectScreen("advice")} />
       </nav>
     </div>
   );
@@ -157,9 +160,9 @@ function NavItem({
       type="button"
       className={`phone-nav__item ${active ? "phone-nav__item--active" : ""}`}
       onClick={onClick}
+      aria-label={label}
     >
-      <Icon size={20} className="phone-nav__icon" />
-      <span>{label}</span>
+      <Icon size={24} className="phone-nav__icon" />
     </button>
   );
 }
@@ -187,6 +190,7 @@ function renderScreen({
   onSelectScreen,
   onDeleteTransaction,
   onAddManualTransaction,
+  onUpdateTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
   onImportNativeSms,
@@ -214,6 +218,7 @@ function renderScreen({
   onSelectScreen: (screen: ScreenKey) => void;
   onDeleteTransaction: (id: string) => void;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
+  onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onImportNativeSms: () => void;
@@ -243,6 +248,7 @@ function renderScreen({
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
           onAddManualTransaction={onAddManualTransaction}
+          onUpdateTransaction={onUpdateTransaction}
           onDeleteTransaction={onDeleteTransaction}
           onImportNativeSms={onImportNativeSms}
           onSetScreen={onSelectScreen}
