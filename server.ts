@@ -3,9 +3,9 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
-import { categorizeSmsText, generateAdviceCards } from "./server/ai";
-import { deleteAuthenticatedAccount } from "./server/account";
-import { buildWhatIfScenario } from "./server/markets";
+import { categorizeSmsText, generateAdviceCards } from "./server/ai.js";
+import { deleteAuthenticatedAccount } from "./server/account.js";
+import { buildWhatIfScenario } from "./server/markets.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { deleteAuthenticatedAccount } from "../../server/account";
+import { deleteAuthenticatedAccount } from "../../server/account.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
