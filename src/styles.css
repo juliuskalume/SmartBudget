@@ -652,6 +652,24 @@ select.input {
   min-width: 0;
 }
 
+.phone-brand--button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phone-brand--button:hover .phone-brand__mark,
+.phone-brand--button:focus-visible .phone-brand__mark {
+  transform: translateY(-1px);
+}
+
+.phone-brand--button:focus-visible {
+  outline: none;
+}
+
 .phone-brand__mark {
   width: 2.4rem;
   height: 2.4rem;
@@ -661,6 +679,9 @@ select.input {
   background: linear-gradient(135deg, var(--sb-secondary-container), var(--sb-primary-container));
   color: #fff;
   box-shadow: 0 14px 26px rgba(15, 109, 243, 0.22);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.16s ease;
 }
 
 .phone-brand__text {

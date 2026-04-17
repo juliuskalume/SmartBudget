@@ -130,7 +130,7 @@ export function AppShell({
   return (
     <div className="phone-shell">
       <header className="phone-header">
-        <div className="phone-brand phone-brand--screen">
+        <button className="phone-brand phone-brand--screen phone-brand--button" type="button" onClick={() => onSelectScreen("profile")}>
           <div className="phone-brand__mark phone-brand__mark--ghost">
             <img className="phone-brand__logo" src="/smartbudgetlogo.png" alt="SmartBudget logo" />
           </div>
@@ -138,7 +138,7 @@ export function AppShell({
             <strong>{headerMeta.title}</strong>
             <span>{headerMeta.subtitle}</span>
           </div>
-        </div>
+        </button>
 
         <div className="phone-header__actions">
           <span className="phone-header__user-name" title={session.name}>
