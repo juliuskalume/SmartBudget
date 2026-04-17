@@ -7,10 +7,10 @@ SmartBudget is a cloud-backed personal finance app for students. It combines SMS
 - React + Vite frontend
 - Supabase auth and per-user cloud storage
 - Groq-powered AI endpoints for categorization and advice
-- Twelve Data-powered live market screening for what-if analysis and investment suggestions
+- Yahoo-powered live market screening for what-if analysis and investment suggestions
 - Capacitor Android wrapper for native SMS import
 
-SmartBudget uses a plan-safe Twelve Data market screen by default so the advisor can work within lower API credit limits.
+SmartBudget uses a cached Yahoo market screen across 100 curated instruments by default, with Twelve Data kept as a secondary backup.
 
 ## Local Setup
 

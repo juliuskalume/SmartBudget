@@ -9,15 +9,17 @@ import type {
   WhatIfScenario,
 } from "../src/types";
 
-const YAHOO_BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
+const YAHOO_SPARK_URL = "https://query1.finance.yahoo.com/v7/finance/spark";
 const TWELVE_DATA_BASE_URL = "https://api.twelvedata.com";
 const twelveDataApiKey = process.env.TWELVE_DATA_API_KEY?.trim();
+const MARKET_CACHE_MS = 15 * 60 * 1000;
+const YAHOO_BATCH_SIZE = 20;
 
-const PERIOD_CONFIG: Record<WhatIfPeriod, { range: string; label: string; days: number }> = {
-  "1m": { range: "1mo", label: "1 month", days: 30 },
-  "3m": { range: "3mo", label: "3 months", days: 90 },
-  "6m": { range: "6mo", label: "6 months", days: 180 },
-  "1y": { range: "1y", label: "1 year", days: 365 },
+const PERIOD_CONFIG: Record<WhatIfPeriod, { label: string; days: number }> = {
+  "1m": { label: "1 month", days: 30 },
+  "3m": { label: "3 months", days: 90 },
+  "6m": { label: "6 months", days: 180 },
+  "1y": { label: "1 year", days: 365 },
 };
 
 const RECOMMENDATION_HORIZONS = [
@@ -26,58 +28,124 @@ const RECOMMENDATION_HORIZONS = [
   { horizon: "years", horizonLabel: "Next 1 year", period: "1y" },
 ] as const;
 
-const PLAN_SAFE_TWELVE_ASSETS = [
+const YAHOO_PRIMARY_ASSETS = [
   { symbol: "AAPL", name: "Apple", category: "Large Cap Equity" },
   { symbol: "MSFT", name: "Microsoft", category: "Large Cap Equity" },
-  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "ETF" },
-  { symbol: "QQQ", name: "Invesco QQQ", category: "ETF" },
+  { symbol: "NVDA", name: "NVIDIA", category: "Growth Equity" },
+  { symbol: "AMZN", name: "Amazon", category: "Large Cap Equity" },
+  { symbol: "GOOGL", name: "Alphabet", category: "Large Cap Equity" },
+  { symbol: "META", name: "Meta", category: "Large Cap Equity" },
+  { symbol: "TSLA", name: "Tesla", category: "Growth Equity" },
+  { symbol: "BRK-B", name: "Berkshire Hathaway", category: "Conglomerate Equity" },
+  { symbol: "JPM", name: "JPMorgan Chase", category: "Financial Equity" },
+  { symbol: "V", name: "Visa", category: "Financial Equity" },
+  { symbol: "MA", name: "Mastercard", category: "Financial Equity" },
+  { symbol: "WMT", name: "Walmart", category: "Consumer Defensive Equity" },
+  { symbol: "COST", name: "Costco", category: "Consumer Defensive Equity" },
+  { symbol: "NFLX", name: "Netflix", category: "Communication Equity" },
+  { symbol: "AMD", name: "AMD", category: "Semiconductor Equity" },
+  { symbol: "AVGO", name: "Broadcom", category: "Semiconductor Equity" },
+  { symbol: "ORCL", name: "Oracle", category: "Software Equity" },
+  { symbol: "CRM", name: "Salesforce", category: "Software Equity" },
+  { symbol: "ADBE", name: "Adobe", category: "Software Equity" },
+  { symbol: "PEP", name: "PepsiCo", category: "Consumer Defensive Equity" },
+  { symbol: "KO", name: "Coca-Cola", category: "Consumer Defensive Equity" },
+  { symbol: "MCD", name: "McDonald's", category: "Consumer Defensive Equity" },
+  { symbol: "DIS", name: "Disney", category: "Communication Equity" },
+  { symbol: "XOM", name: "Exxon Mobil", category: "Energy Equity" },
+  { symbol: "CVX", name: "Chevron", category: "Energy Equity" },
+  { symbol: "UNH", name: "UnitedHealth", category: "Healthcare Equity" },
+  { symbol: "LLY", name: "Eli Lilly", category: "Healthcare Equity" },
+  { symbol: "JNJ", name: "Johnson & Johnson", category: "Healthcare Equity" },
+  { symbol: "PFE", name: "Pfizer", category: "Healthcare Equity" },
+  { symbol: "ABBV", name: "AbbVie", category: "Healthcare Equity" },
+  { symbol: "MRK", name: "Merck", category: "Healthcare Equity" },
+  { symbol: "BAC", name: "Bank of America", category: "Financial Equity" },
+  { symbol: "GS", name: "Goldman Sachs", category: "Financial Equity" },
+  { symbol: "MS", name: "Morgan Stanley", category: "Financial Equity" },
+  { symbol: "C", name: "Citigroup", category: "Financial Equity" },
+  { symbol: "BLK", name: "BlackRock", category: "Financial Equity" },
+  { symbol: "SCHW", name: "Charles Schwab", category: "Financial Equity" },
+  { symbol: "IBM", name: "IBM", category: "Technology Equity" },
+  { symbol: "QCOM", name: "Qualcomm", category: "Semiconductor Equity" },
+  { symbol: "TXN", name: "Texas Instruments", category: "Semiconductor Equity" },
+  { symbol: "INTC", name: "Intel", category: "Semiconductor Equity" },
+  { symbol: "MU", name: "Micron", category: "Semiconductor Equity" },
+  { symbol: "SHOP", name: "Shopify", category: "Software Equity" },
+  { symbol: "UBER", name: "Uber", category: "Mobility Equity" },
+  { symbol: "PLTR", name: "Palantir", category: "Software Equity" },
+  { symbol: "PANW", name: "Palo Alto Networks", category: "Cybersecurity Equity" },
+  { symbol: "SNOW", name: "Snowflake", category: "Cloud Equity" },
+  { symbol: "NOW", name: "ServiceNow", category: "Software Equity" },
+  { symbol: "AMAT", name: "Applied Materials", category: "Semiconductor Equipment Equity" },
+  { symbol: "LRCX", name: "Lam Research", category: "Semiconductor Equipment Equity" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "Broad Market ETF" },
+  { symbol: "QQQ", name: "Invesco QQQ", category: "Growth ETF" },
+  { symbol: "VTI", name: "Vanguard Total Stock Market ETF", category: "Broad Market ETF" },
+  { symbol: "VOO", name: "Vanguard S&P 500 ETF", category: "Broad Market ETF" },
+  { symbol: "IWM", name: "iShares Russell 2000 ETF", category: "Small Cap ETF" },
+  { symbol: "DIA", name: "SPDR Dow Jones Industrial Average ETF", category: "Blue Chip ETF" },
+  { symbol: "XLK", name: "Technology Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLF", name: "Financial Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLE", name: "Energy Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLV", name: "Health Care Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLY", name: "Consumer Discretionary Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLP", name: "Consumer Staples Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLI", name: "Industrial Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLU", name: "Utilities Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLB", name: "Materials Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "XLRE", name: "Real Estate Select Sector SPDR Fund", category: "Sector ETF" },
+  { symbol: "ARKK", name: "ARK Innovation ETF", category: "Thematic ETF" },
+  { symbol: "SMH", name: "VanEck Semiconductor ETF", category: "Thematic ETF" },
+  { symbol: "SOXX", name: "iShares Semiconductor ETF", category: "Thematic ETF" },
+  { symbol: "GLD", name: "SPDR Gold Shares", category: "Commodity ETF" },
+  { symbol: "SLV", name: "iShares Silver Trust", category: "Commodity ETF" },
+  { symbol: "USO", name: "United States Oil Fund", category: "Commodity ETF" },
+  { symbol: "TLT", name: "iShares 20+ Year Treasury Bond ETF", category: "Bond ETF" },
+  { symbol: "IEF", name: "iShares 7-10 Year Treasury Bond ETF", category: "Bond ETF" },
+  { symbol: "SHY", name: "iShares 1-3 Year Treasury Bond ETF", category: "Bond ETF" },
+  { symbol: "HYG", name: "iShares iBoxx $ High Yield Corporate Bond ETF", category: "Bond ETF" },
+  { symbol: "LQD", name: "iShares iBoxx $ Investment Grade Corporate Bond ETF", category: "Bond ETF" },
+  { symbol: "TIP", name: "iShares TIPS Bond ETF", category: "Bond ETF" },
+  { symbol: "VNQ", name: "Vanguard Real Estate ETF", category: "Real Estate ETF" },
+  { symbol: "AGG", name: "iShares Core U.S. Aggregate Bond ETF", category: "Bond ETF" },
+  { symbol: "BTC-USD", name: "Bitcoin", category: "Crypto" },
+  { symbol: "ETH-USD", name: "Ethereum", category: "Crypto" },
+  { symbol: "SOL-USD", name: "Solana", category: "Crypto" },
+  { symbol: "XRP-USD", name: "XRP", category: "Crypto" },
+  { symbol: "ADA-USD", name: "Cardano", category: "Crypto" },
+  { symbol: "DOGE-USD", name: "Dogecoin", category: "Crypto" },
+  { symbol: "BNB-USD", name: "BNB", category: "Crypto" },
+  { symbol: "LINK-USD", name: "Chainlink", category: "Crypto" },
+  { symbol: "AVAX-USD", name: "Avalanche", category: "Crypto" },
+  { symbol: "LTC-USD", name: "Litecoin", category: "Crypto" },
+  { symbol: "FXAIX", name: "Fidelity 500 Index Fund", category: "Mutual Fund" },
+  { symbol: "SWPPX", name: "Schwab S&P 500 Index Fund", category: "Mutual Fund" },
+  { symbol: "VTSAX", name: "Vanguard Total Stock Market Index Fund", category: "Mutual Fund" },
+  { symbol: "VFIAX", name: "Vanguard 500 Index Fund Admiral Shares", category: "Mutual Fund" },
+  { symbol: "FSKAX", name: "Fidelity Total Market Index Fund", category: "Mutual Fund" },
+  { symbol: "FCNTX", name: "Fidelity Contrafund", category: "Mutual Fund" },
+  { symbol: "VWELX", name: "Vanguard Wellington Fund", category: "Balanced Fund" },
+  { symbol: "VTWAX", name: "Vanguard Total World Stock Index Fund", category: "Mutual Fund" },
+  { symbol: "VIGAX", name: "Vanguard Growth Index Fund Admiral Shares", category: "Growth Fund" },
+  { symbol: "VFINX", name: "Vanguard 500 Index Investor Fund", category: "Mutual Fund" },
+] as const;
+
+const TWELVE_FALLBACK_ASSETS = [
+  { symbol: "AAPL", name: "Apple", category: "Large Cap Equity" },
+  { symbol: "MSFT", name: "Microsoft", category: "Large Cap Equity" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "Broad Market ETF" },
+  { symbol: "QQQ", name: "Invesco QQQ", category: "Growth ETF" },
   { symbol: "BTC/USD", name: "Bitcoin", category: "Crypto" },
   { symbol: "ETH/USD", name: "Ethereum", category: "Crypto" },
   { symbol: "AGG", name: "iShares Core U.S. Aggregate Bond ETF", category: "Bond ETF" },
   { symbol: "FXAIX", name: "Fidelity 500 Index Fund", category: "Mutual Fund" },
 ] as const;
 
-const LEGACY_TRACKED_ASSETS = [
-  { symbol: "BTC-USD", name: "Bitcoin", category: "Crypto" },
-  { symbol: "ETH-USD", name: "Ethereum", category: "Crypto" },
-  { symbol: "SOL-USD", name: "Solana", category: "Crypto" },
-  { symbol: "QQQ", name: "Invesco QQQ", category: "Equity ETF" },
-  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "Equity ETF" },
-  { symbol: "VTI", name: "Vanguard Total Stock Market ETF", category: "Equity ETF" },
-  { symbol: "NVDA", name: "NVIDIA", category: "Growth Equity" },
-  { symbol: "MSFT", name: "Microsoft", category: "Large Cap Equity" },
-  { symbol: "GLD", name: "SPDR Gold Shares", category: "Commodity ETF" },
-] as const;
-
-type TwelveAssetDefinition = {
-  provider: "twelve";
+type AssetDefinition = {
   symbol: string;
   name: string;
   category: string;
-};
-
-type LegacyAssetDefinition = {
-  provider: "legacy";
-  symbol: string;
-  name: string;
-  category: string;
-};
-
-type AssetDefinition = TwelveAssetDefinition | LegacyAssetDefinition;
-
-type YahooChartResponse = {
-  chart?: {
-    result?: Array<{
-      meta?: {
-        currency?: string;
-      };
-      timestamp?: number[];
-      indicators?: {
-        adjclose?: Array<{ adjclose?: Array<number | null> }>;
-        quote?: Array<{ close?: Array<number | null> }>;
-      };
-    }>;
-  };
 };
 
 type PricePoint = {
@@ -95,7 +163,28 @@ type AssetSeries = {
 
 type GenericRecord = Record<string, unknown>;
 
-let priceSeriesCache: { expiresAt: number; seriesBySymbol: Map<string, AssetSeries>; provider: "twelve" | "legacy" } | null = null;
+type YahooSparkResponse = {
+  spark?: {
+    result?: Array<{
+      symbol?: string;
+      response?: Array<{
+        meta?: {
+          currency?: string;
+          longName?: string;
+          shortName?: string;
+        };
+        timestamp?: number[];
+        indicators?: {
+          quote?: Array<{
+            close?: Array<number | null>;
+          }>;
+        };
+      }>;
+    }>;
+  };
+};
+
+let priceSeriesCache: { expiresAt: number; seriesBySymbol: Map<string, AssetSeries>; provider: "yahoo" | "twelve" } | null = null;
 
 export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number): Promise<WhatIfScenario> {
   const normalizedAmount = Number(amount);
@@ -109,7 +198,7 @@ export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number):
     throw new Error("Simulation amount must be greater than zero.");
   }
 
-  const { provider, seriesBySymbol } = await loadPlanSafeSeries();
+  const { provider, seriesBySymbol } = await loadMarketSeries();
   const assets = buildWhatIfPerformanceForPeriod(seriesBySymbol, period, normalizedAmount);
 
   if (assets.length === 0) {
@@ -127,9 +216,9 @@ export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number):
     bestAsset,
     assets,
     disclaimer:
-      provider === "twelve"
-        ? "This compares the strongest performer in SmartBudget's plan-safe live market screen. Taxes, fees, and FX slippage are excluded."
-        : "This compares a fallback market basket and excludes taxes, fees, and FX slippage.",
+      provider === "yahoo"
+        ? "This compares the strongest performer in SmartBudget's Yahoo market screen across 100 instruments. Taxes, fees, and FX slippage are excluded."
+        : "This compares the strongest performer in SmartBudget's Twelve Data backup screen. Taxes, fees, and FX slippage are excluded.",
   };
 }
 
@@ -143,7 +232,7 @@ export async function buildInvestmentRecommendations(input: {
     throw new Error("A positive investable balance is required for asset suggestions.");
   }
 
-  const { provider, seriesBySymbol } = await loadPlanSafeSeries();
+  const { provider, seriesBySymbol } = await loadMarketSeries();
   const market = buildMarketSnapshots(seriesBySymbol);
 
   if (market.length === 0) {
@@ -170,9 +259,9 @@ export async function buildInvestmentRecommendations(input: {
     suggestions,
     market,
     disclaimer:
-      provider === "twelve"
-        ? "These are scenario estimates based on SmartBudget's plan-safe Twelve Data screen across equities, ETFs, crypto, bonds, and funds. They are not guaranteed returns and do not include taxes, fees, or slippage."
-        : "These are scenario estimates based on a fallback market screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
+      provider === "yahoo"
+        ? "These are scenario estimates based on SmartBudget's Yahoo market screen across 100 curated instruments. They are not guaranteed returns and do not include taxes, fees, or slippage."
+        : "These are scenario estimates based on SmartBudget's Twelve Data backup screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
   };
 }
 
@@ -180,7 +269,7 @@ export async function buildMarketInsights(input: {
   amount: number;
   summary: Pick<FinancialSummary, "healthScore" | "savingsRate" | "cashFlow" | "netWorth">;
 }) {
-  const { provider, seriesBySymbol } = await loadPlanSafeSeries();
+  const { provider, seriesBySymbol } = await loadMarketSeries();
   const market = buildMarketSnapshots(seriesBySymbol);
 
   if (market.length === 0) {
@@ -219,19 +308,19 @@ export async function buildMarketInsights(input: {
       suggestions,
       market,
       disclaimer:
-        provider === "twelve"
-          ? "These are scenario estimates based on SmartBudget's plan-safe Twelve Data screen across equities, ETFs, crypto, bonds, and funds. They are not guaranteed returns and do not include taxes, fees, or slippage."
-          : "These are scenario estimates based on a fallback market screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
+        provider === "yahoo"
+          ? "These are scenario estimates based on SmartBudget's Yahoo market screen across 100 curated instruments. They are not guaranteed returns and do not include taxes, fees, or slippage."
+          : "These are scenario estimates based on SmartBudget's Twelve Data backup screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
     },
     whatIfByPeriod,
     disclaimer:
-      provider === "twelve"
-        ? "SmartBudget is using a plan-safe Twelve Data screen that fits the current API credit budget."
-        : "SmartBudget is using a fallback market screen because live provider data is not available right now.",
+      provider === "yahoo"
+        ? "SmartBudget is using a cached Yahoo market screen across 100 curated instruments."
+        : "SmartBudget is using the Twelve Data backup screen because Yahoo data was unavailable right now.",
   };
 }
 
-async function loadPlanSafeSeries(): Promise<{ provider: "twelve" | "legacy"; seriesBySymbol: Map<string, AssetSeries> }> {
+async function loadMarketSeries(): Promise<{ provider: "yahoo" | "twelve"; seriesBySymbol: Map<string, AssetSeries> }> {
   if (priceSeriesCache && priceSeriesCache.expiresAt > Date.now()) {
     return {
       provider: priceSeriesCache.provider,
@@ -239,56 +328,133 @@ async function loadPlanSafeSeries(): Promise<{ provider: "twelve" | "legacy"; se
     };
   }
 
-  if (twelveDataApiKey) {
-    try {
-      const seriesBySymbol = await fetchTwelveBatchSeries();
+  try {
+    const yahooSeries = await fetchYahooPrimarySeries();
 
-      if (seriesBySymbol.size > 0) {
-        priceSeriesCache = {
-          expiresAt: Date.now() + 15 * 60 * 1000,
-          seriesBySymbol,
-          provider: "twelve",
-        };
-        return {
-          provider: "twelve",
-          seriesBySymbol,
-        };
-      }
-    } catch {
-      // Fall back to the legacy universe below.
+    if (yahooSeries.size > 0) {
+      priceSeriesCache = {
+        expiresAt: Date.now() + MARKET_CACHE_MS,
+        seriesBySymbol: yahooSeries,
+        provider: "yahoo",
+      };
+      return {
+        provider: "yahoo",
+        seriesBySymbol: yahooSeries,
+      };
     }
+  } catch {
+    // Fall through to Twelve Data backup.
   }
 
-  const seriesBySymbol = await fetchLegacySeries();
+  const twelveSeries = await fetchTwelveFallbackSeries();
+
+  if (twelveSeries.size === 0) {
+    throw new Error("Market data is unavailable right now.");
+  }
+
   priceSeriesCache = {
-    expiresAt: Date.now() + 15 * 60 * 1000,
-    seriesBySymbol,
-    provider: "legacy",
+    expiresAt: Date.now() + MARKET_CACHE_MS,
+    seriesBySymbol: twelveSeries,
+    provider: "twelve",
   };
 
   return {
-    provider: "legacy",
-    seriesBySymbol,
+    provider: "twelve",
+    seriesBySymbol: twelveSeries,
   };
 }
 
-async function fetchTwelveBatchSeries() {
+async function fetchYahooPrimarySeries() {
+  const batches = chunkArray(YAHOO_PRIMARY_ASSETS, YAHOO_BATCH_SIZE);
+  const settled = await Promise.allSettled(batches.map((batch) => fetchYahooSparkBatch(batch)));
+  const combined = new Map<string, AssetSeries>();
+
+  for (const entry of settled) {
+    if (entry.status !== "fulfilled") {
+      continue;
+    }
+
+    for (const [symbol, series] of entry.value.entries()) {
+      combined.set(symbol, series);
+    }
+  }
+
+  return combined;
+}
+
+async function fetchYahooSparkBatch(assets: readonly AssetDefinition[]) {
+  const url = new URL(YAHOO_SPARK_URL);
+  url.search = new URLSearchParams({
+    symbols: assets.map((asset) => asset.symbol).join(","),
+    range: "1y",
+    interval: "1d",
+    includePrePost: "false",
+    indicators: "close",
+  }).toString();
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Mozilla/5.0 (compatible; SmartBudget/1.0; +https://smartbudget.app)",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Yahoo Spark request failed (${response.status}).`);
+  }
+
+  const payload = (await response.json()) as YahooSparkResponse;
+  const results = Array.isArray(payload.spark?.result) ? payload.spark.result : [];
+  const assetMap = new Map(assets.map((asset) => [asset.symbol, asset]));
+  const seriesMap = new Map<string, AssetSeries>();
+
+  for (const result of results) {
+    const symbol = typeof result.symbol === "string" ? result.symbol : null;
+    const responsePayload = Array.isArray(result.response) ? result.response[0] : null;
+    const asset = symbol ? assetMap.get(symbol) : null;
+
+    if (!symbol || !responsePayload || !asset) {
+      continue;
+    }
+
+    const timestamps = Array.isArray(responsePayload.timestamp) ? responsePayload.timestamp : [];
+    const close = responsePayload.indicators?.quote?.[0]?.close;
+    const points = buildPricePoints(close, timestamps);
+
+    if (points.length < 2) {
+      continue;
+    }
+
+    seriesMap.set(symbol, {
+      symbol,
+      name: responsePayload.meta?.longName?.trim() || responsePayload.meta?.shortName?.trim() || asset.name,
+      category: asset.category,
+      currency: responsePayload.meta?.currency?.trim() || "USD",
+      points,
+    });
+  }
+
+  return seriesMap;
+}
+
+async function fetchTwelveFallbackSeries() {
+  if (!twelveDataApiKey) {
+    return new Map<string, AssetSeries>();
+  }
+
   const payload = await fetchTwelveJson("/time_series", {
-    symbol: PLAN_SAFE_TWELVE_ASSETS.map((asset) => asset.symbol).join(","),
+    symbol: TWELVE_FALLBACK_ASSETS.map((asset) => asset.symbol).join(","),
     interval: "1day",
     outputsize: "390",
   });
 
-  const result = new Map<string, AssetSeries>();
+  const seriesMap = new Map<string, AssetSeries>();
 
-  for (const asset of PLAN_SAFE_TWELVE_ASSETS) {
+  for (const asset of TWELVE_FALLBACK_ASSETS) {
     const entry = isRecord(payload[asset.symbol]) ? (payload[asset.symbol] as GenericRecord) : null;
 
-    if (!entry) {
-      continue;
-    }
-
-    if (readString(entry, ["status"])?.toLowerCase() === "error") {
+    if (!entry || readString(entry, ["status"])?.toLowerCase() === "error") {
       continue;
     }
 
@@ -299,7 +465,7 @@ async function fetchTwelveBatchSeries() {
       continue;
     }
 
-    result.set(asset.symbol, {
+    seriesMap.set(asset.symbol, {
       symbol: asset.symbol,
       name: asset.name,
       category: asset.category,
@@ -308,62 +474,7 @@ async function fetchTwelveBatchSeries() {
     });
   }
 
-  return result;
-}
-
-async function fetchLegacySeries() {
-  const settled = await Promise.allSettled(
-    LEGACY_TRACKED_ASSETS.map((asset) =>
-      fetchYahooAssetSeries({
-        provider: "legacy",
-        ...asset,
-      }),
-    ),
-  );
-
-  const result = new Map<string, AssetSeries>();
-
-  for (const entry of settled) {
-    if (entry.status === "fulfilled") {
-      result.set(entry.value.symbol, entry.value);
-    }
-  }
-
-  return result;
-}
-
-async function fetchYahooAssetSeries(asset: LegacyAssetDefinition): Promise<AssetSeries> {
-  const response = await fetch(`${YAHOO_BASE_URL}/${encodeURIComponent(asset.symbol)}?range=1y&interval=1d`, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; SmartBudget/1.0; +https://smartbudget.app)",
-      Accept: "application/json",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Market request failed for ${asset.symbol}.`);
-  }
-
-  const payload = (await response.json()) as YahooChartResponse;
-  const result = payload.chart?.result?.[0];
-  const timestamps = Array.isArray(result?.timestamp) ? result.timestamp : [];
-  const adjClose = result?.indicators?.adjclose?.[0]?.adjclose;
-  const close = result?.indicators?.quote?.[0]?.close;
-  const prices = Array.isArray(adjClose) && adjClose.length > 0 ? adjClose : close;
-  const points = buildPricePoints(prices, timestamps);
-
-  if (!result || points.length < 2) {
-    throw new Error(`No market history returned for ${asset.symbol}.`);
-  }
-
-  return {
-    symbol: asset.symbol,
-    name: asset.name,
-    category: asset.category,
-    currency: result.meta?.currency?.trim() || "USD",
-    points,
-  };
+  return seriesMap;
 }
 
 function buildMarketSnapshots(seriesBySymbol: Map<string, AssetSeries>) {
@@ -412,7 +523,7 @@ function buildScenarioTemplate(seriesBySymbol: Map<string, AssetSeries>, period:
     endDate: bestAsset.endDate,
     bestAsset,
     assets,
-    disclaimer: "Scale the scenario amount locally without spending another provider call.",
+    disclaimer: "Scenario recalculates locally from the cached market snapshot without another provider request.",
   };
 }
 
@@ -537,7 +648,7 @@ function buildFallbackRationale(
   const stability =
     summary.cashFlow < 0 || summary.healthScore < 45
       ? "It balances upside with a tighter volatility profile for your current finances."
-      : "Its momentum is the strongest after adjusting for volatility in SmartBudget's plan-safe live market screen.";
+      : "Its momentum is the strongest after adjusting for volatility in SmartBudget's cached market screen.";
 
   return `${asset.name} leads our ${PERIOD_CONFIG[period].label} screen. ${stability}`;
 }
@@ -666,6 +777,16 @@ async function fetchTwelveJson(pathname: string, params: Record<string, string>)
   }
 
   return payload;
+}
+
+function chunkArray<T>(items: readonly T[], size: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
 }
 
 function readString(record: GenericRecord, keys: string[]) {

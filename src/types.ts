@@ -111,7 +111,7 @@ export interface InvestmentRecommendations {
 
 export interface MarketInsights {
   generatedAt: string;
-  provider: "twelve" | "legacy";
+  provider: "yahoo" | "twelve";
   market: MarketAssetSnapshot[];
   recommendations: InvestmentRecommendations;
   whatIfByPeriod: Record<WhatIfPeriod, WhatIfScenario>;
