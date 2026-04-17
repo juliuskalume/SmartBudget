@@ -1194,7 +1194,7 @@ export function AdviceScreen({
 
       <Panel
         title="Where SmartBudget Would Invest Next"
-        subtitle="Live market suggestions ranked with AI when available, then priced against your current protected balance."
+        subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your protected balance."
       >
         <div className="stack">
           <p className="helper-copy">
@@ -1252,8 +1252,8 @@ export function AdviceScreen({
 
               <p className="helper-copy">
                 {investmentRecommendations.source === "ai"
-                  ? "Groq ranked the live market universe for your balance and profile before SmartBudget calculated the scenario values."
-                  : "Groq was unavailable, so SmartBudget ranked the live market universe with its local scoring model."}
+                  ? "Groq ranked the live market screen for your balance and profile before SmartBudget calculated the scenario values."
+                  : "Groq was unavailable, so SmartBudget ranked the live market screen with its local scoring model."}
               </p>
               <p className="helper-copy">{investmentRecommendations.disclaimer}</p>
             </>
@@ -1264,7 +1264,7 @@ export function AdviceScreen({
         </div>
       </Panel>
 
-      <Panel title="What If You Invested?" subtitle="See what your money would be worth today if it had been placed into the strongest performer in our tracked market basket.">
+      <Panel title="What If You Invested?" subtitle="See what your money would be worth today if it had been placed into the strongest performer in SmartBudget's current live market screen.">
         <div className="stack">
           <div className="segment-switch segment-switch--wide">
             {[

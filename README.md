@@ -7,6 +7,7 @@ SmartBudget is a cloud-backed personal finance app for students. It combines SMS
 - React + Vite frontend
 - Supabase auth and per-user cloud storage
 - Groq-powered AI endpoints for categorization and advice
+- Twelve Data-powered live market screening for what-if analysis and investment suggestions
 - Capacitor Android wrapper for native SMS import
 
 ## Local Setup
@@ -21,6 +22,7 @@ Create a `.env` file from `.env.example`:
 VITE_SUPABASE_URL="https://your-project.supabase.co"
 VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
 GROQ_API_KEY="your-groq-api-key"
+TWELVE_DATA_API_KEY="your-twelve-data-api-key"
 SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
 APP_URL="https://your-app.vercel.app"
 ```
@@ -61,6 +63,7 @@ Use these environment variables in Vercel:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `GROQ_API_KEY`
+- `TWELVE_DATA_API_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
 Vercel will serve the Vite build and the serverless functions in `api/ai/*`.

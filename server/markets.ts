@@ -10,6 +10,8 @@ import type {
 } from "../src/types";
 
 const YAHOO_BASE_URL = "https://query1.finance.yahoo.com/v8/finance/chart";
+const TWELVE_DATA_BASE_URL = "https://api.twelvedata.com";
+const twelveDataApiKey = process.env.TWELVE_DATA_API_KEY?.trim();
 
 const PERIOD_CONFIG: Record<WhatIfPeriod, { range: string; label: string; days: number }> = {
   "1m": { range: "1mo", label: "1 month", days: 30 },
@@ -24,7 +26,16 @@ const RECOMMENDATION_HORIZONS = [
   { horizon: "years", horizonLabel: "Next 1 year", period: "1y" },
 ] as const;
 
-const TRACKED_ASSETS = [
+const DISCOVERY_LIMITS = {
+  moversPerMarket: 12,
+  catalogPerMarket: 8,
+  bonds: 12,
+  batchSize: 8,
+  candidateCacheMs: 15 * 60 * 1000,
+  seriesCacheMs: 15 * 60 * 1000,
+};
+
+const LEGACY_TRACKED_ASSETS = [
   { symbol: "BTC-USD", name: "Bitcoin", category: "Crypto" },
   { symbol: "ETH-USD", name: "Ethereum", category: "Crypto" },
   { symbol: "SOL-USD", name: "Solana", category: "Crypto" },
@@ -36,14 +47,48 @@ const TRACKED_ASSETS = [
   { symbol: "GLD", name: "SPDR Gold Shares", category: "Commodity ETF" },
 ] as const;
 
-type AssetDefinition = (typeof TRACKED_ASSETS)[number];
+const CORE_TWELVE_ASSETS = [
+  { symbol: "AAPL", name: "Apple", category: "Large Cap Equity", type: "Common Stock", market: "stocks" },
+  { symbol: "MSFT", name: "Microsoft", category: "Large Cap Equity", type: "Common Stock", market: "stocks" },
+  { symbol: "NVDA", name: "NVIDIA", category: "Growth Equity", type: "Common Stock", market: "stocks" },
+  { symbol: "SPY", name: "SPDR S&P 500 ETF", category: "ETF", type: "ETF", market: "etf" },
+  { symbol: "QQQ", name: "Invesco QQQ", category: "ETF", type: "ETF", market: "etf" },
+  { symbol: "VTI", name: "Vanguard Total Stock Market ETF", category: "ETF", type: "ETF", market: "etf" },
+  { symbol: "BTC/USD", name: "Bitcoin", category: "Crypto", type: "Digital Currency", market: "crypto" },
+  { symbol: "ETH/USD", name: "Ethereum", category: "Crypto", type: "Digital Currency", market: "crypto" },
+  { symbol: "SOL/USD", name: "Solana", category: "Crypto", type: "Digital Currency", market: "crypto" },
+  { symbol: "AGG", name: "iShares Core U.S. Aggregate Bond ETF", category: "Bond ETF", type: "ETF", market: "etf" },
+  { symbol: "TLT", name: "iShares 20+ Year Treasury Bond ETF", category: "Bond ETF", type: "ETF", market: "etf" },
+  { symbol: "FXAIX", name: "Fidelity 500 Index Fund", category: "Mutual Fund", type: "Mutual Fund", market: "mutual_funds" },
+] as const;
+
+type MarketKey = "stocks" | "etf" | "mutual_funds" | "crypto" | "bond";
+
+type LegacyAssetDefinition = {
+  provider: "legacy";
+  symbol: string;
+  name: string;
+  category: string;
+};
+
+type TwelveAssetDefinition = {
+  provider: "twelve";
+  symbol: string;
+  name: string;
+  category: string;
+  type?: string;
+  market: MarketKey;
+  exchange?: string;
+  country?: string;
+};
+
+type AssetDefinition = LegacyAssetDefinition | TwelveAssetDefinition;
 
 type YahooChartResponse = {
   chart?: {
     result?: Array<{
       meta?: {
         currency?: string;
-        regularMarketPrice?: number;
       };
       timestamp?: number[];
       indicators?: {
@@ -70,6 +115,11 @@ type AssetSeries = {
   points: PricePoint[];
 };
 
+type GenericRecord = Record<string, unknown>;
+
+let candidateUniverseCache: { expiresAt: number; candidates: AssetDefinition[] } | null = null;
+const priceSeriesCache = new Map<string, { expiresAt: number; series: AssetSeries }>();
+
 export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number): Promise<WhatIfScenario> {
   const normalizedAmount = Number(amount);
   const config = PERIOD_CONFIG[period];
@@ -82,20 +132,14 @@ export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number):
     throw new Error("Simulation amount must be greater than zero.");
   }
 
-  const settled = await Promise.allSettled(
-    TRACKED_ASSETS.map(async (asset) => buildWhatIfAssetPerformance(await fetchAssetSeries(asset), period, normalizedAmount)),
-  );
-
-  const assets = settled
-    .filter((entry): entry is PromiseFulfilledResult<WhatIfAssetPerformance> => entry.status === "fulfilled")
-    .map((entry) => entry.value)
-    .sort((left, right) => right.returnPct - left.returnPct);
+  const assets = await loadAssetPerformances(period, normalizedAmount);
 
   if (assets.length === 0) {
     throw new Error("Market data is unavailable right now.");
   }
 
   const bestAsset = assets[0];
+  const isProviderBacked = Boolean(twelveDataApiKey);
 
   return {
     period,
@@ -105,7 +149,9 @@ export async function buildWhatIfScenario(period: WhatIfPeriod, amount: number):
     endDate: bestAsset.endDate,
     bestAsset,
     assets,
-    disclaimer: "This compares a tracked basket of assets, not the entire market, and excludes taxes, fees, and FX slippage.",
+    disclaimer: isProviderBacked
+      ? "This compares the strongest performer in SmartBudget's current Twelve Data market screen across multiple asset classes. Taxes, fees, and FX slippage are excluded."
+      : "This compares a fallback market basket and excludes taxes, fees, and FX slippage.",
   };
 }
 
@@ -119,11 +165,7 @@ export async function buildInvestmentRecommendations(input: {
     throw new Error("A positive investable balance is required for asset suggestions.");
   }
 
-  const settled = await Promise.allSettled(TRACKED_ASSETS.map((asset) => fetchMarketSnapshot(asset)));
-  const market = settled
-    .filter((entry): entry is PromiseFulfilledResult<MarketAssetSnapshot> => entry.status === "fulfilled")
-    .map((entry) => entry.value)
-    .sort((left, right) => right.returns["3m"] - left.returns["3m"]);
+  const market = await loadMarketSnapshots();
 
   if (market.length === 0) {
     throw new Error("Live market suggestions are unavailable right now.");
@@ -149,11 +191,245 @@ export async function buildInvestmentRecommendations(input: {
     suggestions,
     market,
     disclaimer:
-      "These are scenario estimates based on recent momentum in a tracked market universe. They are not guaranteed future returns and do not include taxes, fees, or slippage.",
+      twelveDataApiKey
+        ? "These are scenario estimates based on SmartBudget's live Twelve Data screen across stocks, ETFs, mutual funds, crypto, and bond instruments. They are not guaranteed returns and do not include taxes, fees, or slippage."
+        : "These are scenario estimates based on a fallback market screen. They are not guaranteed returns and do not include taxes, fees, or slippage.",
   };
 }
 
+async function loadAssetPerformances(period: WhatIfPeriod, amount: number) {
+  const universe = await resolveAssetUniverse();
+  const settled = await mapInBatches(universe, DISCOVERY_LIMITS.batchSize, async (asset) =>
+    buildWhatIfAssetPerformance(await fetchAssetSeries(asset), period, amount),
+  );
+
+  return settled
+    .filter((entry): entry is PromiseFulfilledResult<WhatIfAssetPerformance> => entry.status === "fulfilled")
+    .map((entry) => entry.value)
+    .sort((left, right) => right.returnPct - left.returnPct);
+}
+
+async function loadMarketSnapshots() {
+  const universe = await resolveAssetUniverse();
+  const settled = await mapInBatches(universe, DISCOVERY_LIMITS.batchSize, async (asset) =>
+    fetchMarketSnapshot(asset),
+  );
+
+  return settled
+    .filter((entry): entry is PromiseFulfilledResult<MarketAssetSnapshot> => entry.status === "fulfilled")
+    .map((entry) => entry.value)
+    .sort((left, right) => right.returns["3m"] - left.returns["3m"]);
+}
+
+async function resolveAssetUniverse(): Promise<AssetDefinition[]> {
+  if (twelveDataApiKey) {
+    if (candidateUniverseCache && candidateUniverseCache.expiresAt > Date.now()) {
+      return candidateUniverseCache.candidates;
+    }
+
+    const discovered = await discoverTwelveDataUniverse();
+
+    if (discovered.length > 0) {
+      candidateUniverseCache = {
+        expiresAt: Date.now() + DISCOVERY_LIMITS.candidateCacheMs,
+        candidates: discovered,
+      };
+      return discovered;
+    }
+  }
+
+  return LEGACY_TRACKED_ASSETS.map((asset) => ({
+    provider: "legacy" as const,
+    ...asset,
+  }));
+}
+
+async function discoverTwelveDataUniverse(): Promise<AssetDefinition[]> {
+  const [stockMovers, etfMovers, fundMovers, cryptoMovers, stockCatalog, etfCatalog, fundCatalog, cryptoCatalog, bondCatalog] =
+    await Promise.allSettled([
+      fetchTwelveMarketMovers("stocks", DISCOVERY_LIMITS.moversPerMarket),
+      fetchTwelveMarketMovers("etf", DISCOVERY_LIMITS.moversPerMarket),
+      fetchTwelveMarketMovers("mutual_funds", DISCOVERY_LIMITS.moversPerMarket),
+      fetchTwelveMarketMovers("crypto", DISCOVERY_LIMITS.moversPerMarket),
+      fetchTwelveCatalog("stocks", DISCOVERY_LIMITS.catalogPerMarket),
+      fetchTwelveCatalog("etfs", DISCOVERY_LIMITS.catalogPerMarket),
+      fetchTwelveCatalog("funds", DISCOVERY_LIMITS.catalogPerMarket),
+      fetchTwelveCatalog("cryptocurrencies", DISCOVERY_LIMITS.catalogPerMarket),
+      fetchTwelveBonds(DISCOVERY_LIMITS.bonds),
+    ]);
+
+  const discovered = dedupeAssetDefinitions([
+    ...normalizeSettledValue(stockMovers),
+    ...normalizeSettledValue(etfMovers),
+    ...normalizeSettledValue(fundMovers),
+    ...normalizeSettledValue(cryptoMovers),
+    ...normalizeSettledValue(stockCatalog),
+    ...normalizeSettledValue(etfCatalog),
+    ...normalizeSettledValue(fundCatalog),
+    ...normalizeSettledValue(cryptoCatalog),
+    ...normalizeSettledValue(bondCatalog),
+    ...CORE_TWELVE_ASSETS.map((asset) => ({
+      provider: "twelve" as const,
+      ...asset,
+    })),
+  ]);
+
+  return discovered.slice(0, 80);
+}
+
+async function fetchTwelveMarketMovers(market: Exclude<MarketKey, "bond">, limit: number) {
+  const payload = await fetchTwelveJson(`/market_movers/${market}`, {
+    direction: "gainers",
+    outputsize: String(limit),
+  });
+
+  return normalizeTwelveCandidates(extractRecordArray(payload), market);
+}
+
+async function fetchTwelveCatalog(endpoint: "stocks" | "etfs" | "funds" | "cryptocurrencies", limit: number) {
+  const payload = await fetchTwelveJson(`/${endpoint}`, {
+    outputsize: String(limit),
+    page: "1",
+  });
+
+  const market = endpoint === "stocks" ? "stocks" : endpoint === "etfs" ? "etf" : endpoint === "funds" ? "mutual_funds" : "crypto";
+  return normalizeTwelveCandidates(extractRecordArray(payload), market);
+}
+
+async function fetchTwelveBonds(limit: number) {
+  const payload = await fetchTwelveJson("/bonds", {
+    outputsize: String(limit),
+    page: "1",
+    country: "United States",
+  });
+
+  return normalizeTwelveCandidates(extractRecordArray(payload), "bond");
+}
+
+function normalizeTwelveCandidates(records: GenericRecord[], market: MarketKey): TwelveAssetDefinition[] {
+  const normalized: Array<TwelveAssetDefinition | null> = records.map((record) => {
+      const symbol = readString(record, ["symbol", "ticker"]);
+      if (!symbol) {
+        return null;
+      }
+
+      const exchange = readString(record, ["exchange", "mic_code"]);
+      const country = readString(record, ["country"]);
+      const name =
+        readString(record, ["name", "instrument_name"]) ||
+        buildTwelveDisplayName(record, market, symbol);
+      const type = readString(record, ["type"]) || getDefaultTypeForMarket(market);
+
+      return {
+        provider: "twelve" as const,
+        symbol,
+        name,
+        category: getCategoryForRecord(record, market),
+        type,
+        market,
+        exchange,
+        country,
+      };
+    });
+
+  return normalized.filter((asset): asset is TwelveAssetDefinition => asset !== null);
+}
+
+function buildTwelveDisplayName(record: GenericRecord, market: MarketKey, fallbackSymbol: string) {
+  if (market === "crypto") {
+    const base = readString(record, ["currency_base"]);
+    const quote = readString(record, ["currency_quote"]);
+
+    if (base && quote) {
+      return `${base} / ${quote}`;
+    }
+  }
+
+  return fallbackSymbol;
+}
+
+function getDefaultTypeForMarket(market: MarketKey) {
+  switch (market) {
+    case "stocks":
+      return "Common Stock";
+    case "etf":
+      return "ETF";
+    case "mutual_funds":
+      return "Mutual Fund";
+    case "crypto":
+      return "Digital Currency";
+    case "bond":
+      return "Bond";
+    default:
+      return undefined;
+  }
+}
+
+function getCategoryForRecord(record: GenericRecord, market: MarketKey) {
+  const explicitType = readString(record, ["type"]);
+
+  if (market === "crypto") {
+    return "Crypto";
+  }
+
+  if (market === "bond") {
+    return explicitType || "Bond";
+  }
+
+  if (market === "etf") {
+    return explicitType || "ETF";
+  }
+
+  if (market === "mutual_funds") {
+    return explicitType || "Mutual Fund";
+  }
+
+  return explicitType || "Common Stock";
+}
+
 async function fetchAssetSeries(asset: AssetDefinition): Promise<AssetSeries> {
+  return asset.provider === "twelve" ? fetchTwelveAssetSeries(asset) : fetchYahooAssetSeries(asset);
+}
+
+async function fetchTwelveAssetSeries(asset: TwelveAssetDefinition): Promise<AssetSeries> {
+  const cacheKey = `twelve:${asset.symbol}:${asset.type ?? ""}`;
+  const cached = priceSeriesCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.series;
+  }
+
+  const payload = await fetchTwelveJson("/time_series", {
+    symbol: asset.symbol,
+    interval: "1day",
+    outputsize: "390",
+    ...(asset.type ? { type: asset.type } : {}),
+  });
+
+  const meta = isRecord(payload.meta) ? payload.meta : {};
+  const points = extractTwelvePricePoints(payload);
+
+  if (points.length < 2) {
+    throw new Error(`No time series returned for ${asset.symbol}.`);
+  }
+
+  const series: AssetSeries = {
+    symbol: asset.symbol,
+    name: asset.name,
+    category: asset.category,
+    currency: readString(meta, ["currency"]) || "USD",
+    points,
+  };
+
+  priceSeriesCache.set(cacheKey, {
+    expiresAt: Date.now() + DISCOVERY_LIMITS.seriesCacheMs,
+    series,
+  });
+
+  return series;
+}
+
+async function fetchYahooAssetSeries(asset: LegacyAssetDefinition): Promise<AssetSeries> {
   const response = await fetch(`${YAHOO_BASE_URL}/${encodeURIComponent(asset.symbol)}?range=1y&interval=1d`, {
     headers: {
       "User-Agent": "Mozilla/5.0 (compatible; SmartBudget/1.0; +https://smartbudget.app)",
@@ -249,7 +525,7 @@ function buildRecommendationSuggestions(input: {
   return RECOMMENDATION_HORIZONS.map((config) => {
     const aiSelection = input.aiSelections.find((entry) => entry.horizon === config.horizon && entry.period === config.period);
     const asset =
-      (aiSelection ? input.market.find((entry) => entry.symbol === aiSelection.assetSymbol) : null) ??
+      (aiSelection ? input.market.find((entry) => entry.symbol.toUpperCase() === aiSelection.assetSymbol.toUpperCase()) : null) ??
       pickFallbackAsset(input.market, config.period, input.summary);
 
     return createInvestmentSuggestion({
@@ -258,9 +534,7 @@ function buildRecommendationSuggestions(input: {
       horizon: config.horizon,
       horizonLabel: config.horizonLabel,
       period: config.period,
-      rationale:
-        aiSelection?.rationale ??
-        buildFallbackRationale(asset, config.period, input.summary),
+      rationale: aiSelection?.rationale ?? buildFallbackRationale(asset, config.period, input.summary),
       confidence: aiSelection?.confidence ?? deriveConfidence(asset, config.period),
     });
   });
@@ -330,7 +604,7 @@ function buildFallbackRationale(
   const stability =
     summary.cashFlow < 0 || summary.healthScore < 45
       ? "It balances upside with a tighter volatility profile for your current finances."
-      : "Its momentum is the strongest after adjusting for volatility in the tracked market.";
+      : "Its momentum is the strongest after adjusting for volatility in SmartBudget's current live market screen.";
 
   return `${asset.name} leads our ${PERIOD_CONFIG[period].label} screen. ${stability}`;
 }
@@ -382,6 +656,25 @@ function buildPricePoints(prices: Array<number | null> | undefined, timestamps: 
     .filter((entry) => Number.isFinite(entry.price) && entry.price > 0 && Number.isFinite(entry.timestamp));
 }
 
+function extractTwelvePricePoints(payload: GenericRecord) {
+  return extractRecordArray(payload)
+    .map((entry) => ({
+      price: readNumber(entry, ["close", "price", "value"]),
+      timestamp: parseDateToTimestamp(readString(entry, ["datetime", "date", "timestamp"])),
+    }))
+    .filter((entry): entry is PricePoint => Number.isFinite(entry.price) && entry.price > 0 && Number.isFinite(entry.timestamp))
+    .sort((left, right) => left.timestamp - right.timestamp);
+}
+
+function parseDateToTimestamp(value: string | null) {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? Math.floor(timestamp / 1000) : Number.NaN;
+}
+
 function computeAnnualizedVolatilityPct(points: PricePoint[]) {
   if (points.length < 3) {
     return 0;
@@ -403,4 +696,126 @@ function computeAnnualizedVolatilityPct(points: PricePoint[]) {
   const variance = dailyReturns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (dailyReturns.length - 1);
 
   return Math.sqrt(variance) * Math.sqrt(252) * 100;
+}
+
+async function fetchTwelveJson(pathname: string, params: Record<string, string>) {
+  if (!twelveDataApiKey) {
+    throw new Error("TWELVE_DATA_API_KEY is not configured.");
+  }
+
+  const url = new URL(pathname, TWELVE_DATA_BASE_URL);
+  const searchParams = new URLSearchParams({
+    ...params,
+    apikey: twelveDataApiKey,
+    format: "JSON",
+  });
+  url.search = searchParams.toString();
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "Mozilla/5.0 (compatible; SmartBudget/1.0; +https://smartbudget.app)",
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Twelve Data request failed (${response.status}) for ${pathname}.`);
+  }
+
+  const payload = (await response.json()) as GenericRecord;
+  const status = readString(payload, ["status"]);
+
+  if (status?.toLowerCase() === "error") {
+    const message = readString(payload, ["message"]) || readString(payload, ["code"]) || `Twelve Data returned an error for ${pathname}.`;
+    throw new Error(message);
+  }
+
+  return payload;
+}
+
+function extractRecordArray(payload: GenericRecord): GenericRecord[] {
+  const candidates: unknown[] = [
+    payload.data,
+    payload.values,
+    payload.result,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.filter(isRecord);
+    }
+
+    if (isRecord(candidate)) {
+      const nested = [candidate.data, candidate.values, candidate.result, candidate.list];
+
+      for (const entry of nested) {
+        if (Array.isArray(entry)) {
+          return entry.filter(isRecord);
+        }
+      }
+    }
+  }
+
+  return [];
+}
+
+function dedupeAssetDefinitions(assets: AssetDefinition[]) {
+  const seen = new Set<string>();
+
+  return assets.filter((asset) => {
+    const key = asset.symbol.trim().toUpperCase();
+
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeSettledValue<T>(result: PromiseSettledResult<T[]>) {
+  return result.status === "fulfilled" ? result.value : [];
+}
+
+async function mapInBatches<T, R>(items: T[], batchSize: number, worker: (item: T) => Promise<R>) {
+  const settled: Array<PromiseSettledResult<R>> = [];
+
+  for (let index = 0; index < items.length; index += batchSize) {
+    const batch = items.slice(index, index + batchSize);
+    const results = await Promise.allSettled(batch.map((item) => worker(item)));
+    settled.push(...results);
+  }
+
+  return settled;
+}
+
+function readString(record: GenericRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function readNumber(record: GenericRecord, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+    const numeric = Number(value);
+
+    if (Number.isFinite(numeric)) {
+      return numeric;
+    }
+  }
+
+  return Number.NaN;
+}
+
+function isRecord(value: unknown): value is GenericRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
