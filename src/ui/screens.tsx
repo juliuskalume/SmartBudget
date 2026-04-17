@@ -157,6 +157,7 @@ export function DashboardScreen({
   const hasTransactions = recentTransactions.length > 0;
   const totalBalance = summary.savings;
   const topCategories = categoryBreakdown.slice(0, 4);
+  const [categoryChartMode, setCategoryChartMode] = useState<"pie" | "bar">("pie");
 
   return (
     <div className="screen-stack screen-stack--dashboard">
@@ -189,29 +190,75 @@ export function DashboardScreen({
       <Panel
         title="Spending By Category"
         subtitle={hasTransactions ? "Your current expense mix." : "Import transactions to populate this chart."}
+        action={
+          categoryBreakdown.length > 0 ? (
+            <div className="segment-switch segment-switch--tiny" aria-label="Category chart type">
+              <button
+                className={`segment-switch__button ${categoryChartMode === "pie" ? "segment-switch__button--active" : ""}`}
+                type="button"
+                onClick={() => setCategoryChartMode("pie")}
+                aria-label="Show pie chart"
+              >
+                <PieChartIcon size={13} />
+                Pie
+              </button>
+              <button
+                className={`segment-switch__button ${categoryChartMode === "bar" ? "segment-switch__button--active" : ""}`}
+                type="button"
+                onClick={() => setCategoryChartMode("bar")}
+                aria-label="Show bar chart"
+              >
+                <BarChart3 size={13} />
+                Bar
+              </button>
+            </div>
+          ) : null
+        }
       >
         {categoryBreakdown.length > 0 ? (
           <div className="category-overview">
             <ChartFrame height={220}>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
-                  <Pie
-                    data={categoryBreakdown}
-                    dataKey="amount"
-                    nameKey="category"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={54}
-                    outerRadius={84}
-                    paddingAngle={3}
-                  >
-                    {categoryBreakdown.map((entry) => (
-                      <Cell key={entry.category} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              {categoryChartMode === "pie" ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
+                    <Pie
+                      data={categoryBreakdown}
+                      dataKey="amount"
+                      nameKey="category"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={54}
+                      outerRadius={84}
+                      paddingAngle={3}
+                    >
+                      {categoryBreakdown.map((entry) => (
+                        <Cell key={entry.category} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={categoryBreakdown} layout="vertical" margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
+                    <Tooltip {...chartTooltipStyle} formatter={(value) => formatMoney(Number(value))} />
+                    <XAxis type="number" hide />
+                    <YAxis
+                      type="category"
+                      dataKey="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#d5cc8a", fontSize: 10 }}
+                      width={86}
+                    />
+                    <Bar dataKey="amount" radius={[0, 10, 10, 0]} barSize={14}>
+                      {categoryBreakdown.map((entry) => (
+                        <Cell key={entry.category} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </ChartFrame>
 
             <div className="category-legend">

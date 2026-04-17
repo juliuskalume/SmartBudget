@@ -1834,6 +1834,14 @@ body::before {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.segment-switch--tiny {
+  width: auto;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border-radius: 999px;
+}
+
 .segment-switch__button {
   min-height: 42px;
   border: 0;
@@ -1842,6 +1850,16 @@ body::before {
   color: var(--sb-on-surface-variant);
   font-weight: 700;
   cursor: pointer;
+}
+
+.segment-switch--tiny .segment-switch__button {
+  min-height: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.32rem 0.52rem;
+  font-size: 0.68rem;
+  line-height: 1;
 }
 
 .composer-panel {
