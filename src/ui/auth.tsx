@@ -172,6 +172,16 @@ export function AuthScreen({
             </span>
           </div>
         ) : null}
+
+        <div className="legal-links">
+          <a href="/privacy.html" target="_blank" rel="noreferrer">
+            Privacy Policy
+          </a>
+          <span aria-hidden="true">•</span>
+          <a href="/terms.html" target="_blank" rel="noreferrer">
+            Terms of Use
+          </a>
+        </div>
       </Panel>
     </div>
   );
@@ -218,6 +228,10 @@ export function PermissionScreen({
             {isAndroidNative
               ? "On Android, SmartBudget can read existing and incoming SMS after permission is granted. Only messages that look financial are classified, and only transaction data is saved to your account."
               : "SMS content is used only for local analysis and optional AI categorization."}
+          </p>
+          <p className="privacy-card__legal">
+            Read our <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a> and{" "}
+            <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>.
           </p>
         </div>
       </Panel>
