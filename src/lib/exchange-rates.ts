@@ -25,18 +25,18 @@ export async function fetchExchangeRates(baseCurrency: CurrencyCode, quoteCurren
     };
   }
 
-  // Try Frankfurter first
+  // Try Exchange Rate API first
   try {
-    const frankfurterResult = await fetchFromFrankfurter(base, quotes);
-    return frankfurterResult;
-  } catch (frankfurterError) {
-    // Fallback to Exchange Rate API if Frankfurter fails
+    const exchangeRateResult = await fetchFromExchangeRateApi(base, quotes);
+    return exchangeRateResult;
+  } catch (exchangeRateError) {
+    // Fallback to Frankfurter if Exchange Rate API fails
     try {
-      const exchangeRateResult = await fetchFromExchangeRateApi(base, quotes);
-      return exchangeRateResult;
-    } catch (exchangeRateError) {
-      // If both fail, throw the original Frankfurter error
-      throw frankfurterError;
+      const frankfurterResult = await fetchFromFrankfurter(base, quotes);
+      return frankfurterResult;
+    } catch (frankfurterError) {
+      // If both fail, throw the original Exchange Rate API error
+      throw exchangeRateError;
     }
   }
 }
