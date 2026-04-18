@@ -1,4 +1,4 @@
-import type { CurrencyCode, ScreenKey, Transaction } from "../types";
+import type { CurrencyCode, ScreenKey, Transaction, SmartSavePlusState } from "../types";
 import { normalizeCurrencyCode } from "./exchange-rates";
 
 const DEVICE_STATE_KEY = "smartbudget-device-state-v2";
@@ -14,6 +14,7 @@ export type CloudState = {
   transactions: Transaction[];
   smartSaveGoal: number;
   targetCurrency: CurrencyCode;
+  smartSavePlus: SmartSavePlusState;
 };
 
 export function createDefaultDeviceState(): DeviceState {
@@ -28,6 +29,11 @@ export function createDefaultCloudState(): CloudState {
     transactions: [],
     smartSaveGoal: DEFAULT_SMART_SAVE_GOAL,
     targetCurrency: "USD",
+    smartSavePlus: {
+      protectedHoldings: [],
+      currencyTransactions: [],
+      totalProtectedValue: 0,
+    },
   };
 }
 

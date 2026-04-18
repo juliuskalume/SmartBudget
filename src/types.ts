@@ -139,12 +139,40 @@ export interface ExchangeRateSnapshot {
   source: "frankfurter" | "exchangerate-api" | "fallback";
 }
 
-export interface BalancePurchasingPowerShift {
-  countryCode: string;
-  countryName: string;
-  latestMonth: string | null;
-  inflationPct: number;
-  purchasingPowerShiftPct: number;
-  isIncrease: boolean;
-  source: "worldbank-gem" | "bundled";
+export interface Bank {
+  id: string;
+  name: string;
+  code: string;
+  country: string;
+  iban?: string;
+  swift?: string;
+  description?: string;
+}
+
+export interface ProtectedCurrencyHolding {
+  id: string;
+  currency: CurrencyCode;
+  amount: number;
+  bankId: string;
+  purchaseDate: string;
+  purchaseRate: number;
+  purchaseAmount: number; // Amount in local currency used to buy this
+}
+
+export interface CurrencyTransaction {
+  id: string;
+  type: "buy" | "sell";
+  currency: CurrencyCode;
+  amount: number;
+  bankId: string;
+  exchangeRate: number;
+  localAmount: number; // Amount in local currency
+  date: string;
+  description: string;
+}
+
+export interface SmartSavePlusState {
+  protectedHoldings: ProtectedCurrencyHolding[];
+  currencyTransactions: CurrencyTransaction[];
+  totalProtectedValue: number;
 }

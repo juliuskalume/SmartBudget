@@ -8,6 +8,7 @@ import type {
   FinancialSummary,
   ManualTransactionDraft,
   ScreenKey,
+  SmartSavePlusState,
   Transaction,
 } from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
@@ -144,6 +145,9 @@ export function AppShell({
     onShareApp,
     onSignOut,
     onDeleteAccount,
+    smartSavePlus,
+    onBuyCurrency,
+    onSellCurrency,
   });
 
   const initials = session.name.trim().charAt(0).toUpperCase() || "U";
@@ -256,6 +260,9 @@ function renderScreen({
   onShareApp,
   onSignOut,
   onDeleteAccount,
+  smartSavePlus,
+  onBuyCurrency,
+  onSellCurrency,
 }: {
   session: AppSessionView;
   activeScreen: ScreenKey;
@@ -297,6 +304,9 @@ function renderScreen({
   onShareApp: () => Promise<boolean>;
   onSignOut: () => Promise<void>;
   onDeleteAccount: () => Promise<boolean>;
+  smartSavePlus: SmartSavePlusState;
+  onBuyCurrency: (amount: number, currency: CurrencyCode, bankId: string) => void;
+  onSellCurrency: (holdingId: string, amount: number) => void;
 }) {
   switch (activeScreen) {
     case "dashboard":
@@ -358,6 +368,9 @@ function renderScreen({
           smartSaveGoal={smartSaveGoal}
           onUpdateGoal={onUpdateGoal}
           onUpdateTargetCurrency={onUpdateTargetCurrency}
+          smartSavePlus={cloudState.smartSavePlus}
+          onBuyCurrency={buyProtectedCurrency}
+          onSellCurrency={sellProtectedCurrency}
         />
       );
     case "advice":

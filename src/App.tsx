@@ -35,6 +35,8 @@ import {
 import { getBalancePurchasingPowerShift, getCountryByCode, getCountryCurrency, getCountryOptions, inferCountryCodeFromLocale } from "./lib/countries";
 import { buildFallbackExchangeRates, fetchExchangeRates, normalizeCurrencyCode } from "./lib/exchange-rates";
 import { fetchBalancePurchasingPowerShift } from "./lib/inflation";
+import { buyCurrency, sellCurrency, calculateTotalProtectedValue } from "./lib/smart-save-plus";
+import { getBanksForCountry } from "./lib/banks";
 import type {
   AdviceCard,
   BalancePurchasingPowerShift,
@@ -336,7 +338,7 @@ function App() {
   const insights = buildInsights(summary, cloudState.transactions, exchangeRates);
   const adviceCards = aiAdvice ?? buildAdvice(summary, cloudState.transactions, exchangeRates);
   const safeSavings = Math.max(summary.savings, 0);
-  const protectedSavings = safeSavings * 0.6;
+  const protectedSavings = calculateTotalProtectedValue(cloudState.smartSavePlus.protectedHoldings, displayCurrency, exchangeRates);
   const convertedSavings = convertCurrency(protectedSavings, cloudState.targetCurrency, displayCurrency, exchangeRates);
   const projection = projectSavings(protectedSavings, Math.max(summary.cashFlow, 0), 12, displayCurrency, exchangeRates);
   const goalProgress =
@@ -515,6 +517,20 @@ function App() {
 
   function updateTargetCurrency(value: CurrencyCode) {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
+  }
+
+  function buyProtectedCurrency(amount: number, currency: CurrencyCode, bankId: string) {
+    setCloudState((current) => {
+      const newState = buyCurrency(amount, currency, bankId, displayCurrency, exchangeRates, current.smartSavePlus);
+      return { ...current, smartSavePlus: newState };
+    });
+  }
+
+  function sellProtectedCurrency(holdingId: string, amount: number) {
+    setCloudState((current) => {
+      const result = sellCurrency(holdingId, amount, displayCurrency, exchangeRates, current.smartSavePlus);
+      return { ...current, smartSavePlus: result.newState };
+    });
   }
 
   async function saveProfileDetails(input: { name: string; email: string; avatarUrl: string; countryCode: string }) {
@@ -1173,6 +1189,9 @@ function App() {
         onOpenSupportComposer={openSupportComposer}
         onShareApp={shareApp}
         onDeleteAccount={deleteAccount}
+        smartSavePlus={cloudState.smartSavePlus}
+        onBuyCurrency={buyProtectedCurrency}
+        onSellCurrency={sellProtectedCurrency}
       />
       <Toast flash={flash} />
     </div>
