@@ -338,7 +338,7 @@ function App() {
   const insights = buildInsights(summary, cloudState.transactions, exchangeRates);
   const adviceCards = aiAdvice ?? buildAdvice(summary, cloudState.transactions, exchangeRates);
   const safeSavings = Math.max(summary.savings, 0);
-  const protectedSavings = calculateTotalProtectedValue(cloudState.smartSavePlus?.protectedHoldings ?? [], displayCurrency, exchangeRates);
+  const protectedSavings = calculateTotalProtectedValue(cloudState.smartSavePlus?.protectedHoldings || [], displayCurrency, exchangeRates);
   const convertedSavings = convertCurrency(protectedSavings, cloudState.targetCurrency, displayCurrency, exchangeRates);
   const projection = projectSavings(protectedSavings, Math.max(summary.cashFlow, 0), 12, displayCurrency, exchangeRates);
   const goalProgress =
@@ -367,6 +367,11 @@ function App() {
       transactions: cloneDemoTransactions(),
       smartSaveGoal: DEFAULT_SMART_SAVE_GOAL,
       targetCurrency: "USD",
+      smartSavePlus: {
+        protectedHoldings: [],
+        currencyTransactions: [],
+        lastSyncTimestamp: Date.now(),
+      },
     };
 
     appliedCloudUserIdRef.current = null;
