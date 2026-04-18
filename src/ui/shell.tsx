@@ -368,9 +368,9 @@ function renderScreen({
           smartSaveGoal={smartSaveGoal}
           onUpdateGoal={onUpdateGoal}
           onUpdateTargetCurrency={onUpdateTargetCurrency}
-          smartSavePlus={cloudState.smartSavePlus}
-          onBuyCurrency={buyProtectedCurrency}
-          onSellCurrency={sellProtectedCurrency}
+          smartSavePlus={smartSavePlus}
+          onBuyCurrency={onBuyCurrency}
+          onSellCurrency={onSellCurrency}
         />
       );
     case "advice":
