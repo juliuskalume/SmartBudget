@@ -1533,7 +1533,7 @@ export function AdviceScreen({
 
   useEffect(() => {
     if (normalizeInvestableAmount(investableBalanceUsd) <= 0) {
-      setInvestmentError("Build a positive protected balance first, then SmartBudget can suggest live market assets.");
+      setInvestmentError("Add a positive available savings amount first, then SmartBudget can suggest live market assets.");
       return;
     }
 
@@ -1585,13 +1585,13 @@ export function AdviceScreen({
       <div style={{ order: 2 }}>
         <Panel
           title="Where SmartBudget Would Invest Next"
-          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your protected balance."
+          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your available savings amount."
         >
           <div className="stack">
           <p className="helper-copy">
             {investableBalanceUsd > 0
               ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")}.`
-              : "No protected balance is available yet for live investment suggestions."}
+              : "No available savings amount is set yet for live investment suggestions."}
           </p>
 
           {marketInsights ? <p className="helper-copy">{marketInsights.disclaimer}</p> : null}
@@ -1699,8 +1699,8 @@ export function AdviceScreen({
 
           <p className="helper-copy">
             {isBackedBySavings
-              ? "This starts with your current protected savings converted to USD. Change the amount to test a different scenario."
-              : "No protected savings are available yet, so the simulation starts with a manual USD amount."}
+              ? "This starts with your current available savings converted to USD. Change the amount to test a different scenario."
+              : "No available savings are set yet, so the simulation starts with a manual USD amount."}
           </p>
 
           {whatIfScenario ? (
