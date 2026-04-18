@@ -3275,6 +3275,42 @@ h6 {
 .tab-buttons > .button {
   width: 100%;
   justify-content: center;
+.tab-button {
+  appearance: none;
+  border: 1px solid rgba(15, 109, 243, 0.18);
+  border-radius: 14px;
+  padding: 0.65rem 0.75rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.01em;
+  color: var(--sb-primary);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(242, 247, 255, 0.88) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 8px 18px rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.tab-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(15, 109, 243, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    0 12px 24px rgba(15, 23, 42, 0.09);
+}
+
+.tab-button--active {
+  color: #ffffff;
+  border-color: rgba(15, 109, 243, 0.52);
+  background: linear-gradient(180deg, #1e75f8 0%, #0056c5 100%);
+  box-shadow:
+    0 14px 26px rgba(15, 109, 243, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
 
 @media (min-width: 640px) {
