@@ -1135,18 +1135,21 @@ export function SmartSaveScreen({
 
         <div className="tab-buttons">
           <button
+            type="button"
             className={`tab-button ${activeTab === "overview" ? "tab-button--active" : ""}`}
             onClick={() => setActiveTab("overview")}
           >
             Overview
           </button>
           <button
+            type="button"
             className={`tab-button ${activeTab === "buy" ? "tab-button--active" : ""}`}
             onClick={() => setActiveTab("buy")}
           >
             Buy Currency
           </button>
           <button
+            type="button"
             className={`tab-button ${activeTab === "sell" ? "tab-button--active" : ""}`}
             onClick={() => setActiveTab("sell")}
           >
