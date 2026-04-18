@@ -25,13 +25,30 @@ export async function fetchExchangeRates(baseCurrency: CurrencyCode, quoteCurren
     };
   }
 
+  // Try Frankfurter first
+  try {
+    const frankfurterResult = await fetchFromFrankfurter(base, quotes);
+    return frankfurterResult;
+  } catch (frankfurterError) {
+    // Fallback to Exchange Rate API if Frankfurter fails
+    try {
+      const exchangeRateResult = await fetchFromExchangeRateApi(base, quotes);
+      return exchangeRateResult;
+    } catch (exchangeRateError) {
+      // If both fail, throw the original Frankfurter error
+      throw frankfurterError;
+    }
+  }
+}
+
+async function fetchFromFrankfurter(base: string, quotes: string[]): Promise<ExchangeRateSnapshot> {
   const url = new URL("https://api.frankfurter.dev/v1/latest");
   url.searchParams.set("base", base);
   url.searchParams.set("symbols", quotes.join(","));
 
   const response = await fetch(url.toString());
   if (!response.ok) {
-    throw new Error(`Unable to load exchange rates (${response.status}).`);
+    throw new Error(`Frankfurter request failed (${response.status}).`);
   }
 
   const payload = await response.json();
@@ -46,6 +63,46 @@ export async function fetchExchangeRates(baseCurrency: CurrencyCode, quoteCurren
         .filter((entry) => Number.isFinite(entry[1])),
     ),
     source: "frankfurter",
+  };
+}
+
+async function fetchFromExchangeRateApi(base: string, quotes: string[]): Promise<ExchangeRateSnapshot> {
+  const apiKey = import.meta.env.VITE_EXCHANGERATE_API_KEY;
+  if (!apiKey) {
+    throw new Error("Exchange Rate API key is not configured.");
+  }
+
+  const url = `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${base}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Exchange Rate API request failed (${response.status}).`);
+  }
+
+  const payload = await response.json();
+
+  // Check for API errors
+  if (payload.result === "error") {
+    throw new Error(`Exchange Rate API error: ${payload["error-type"]}.`);
+  }
+
+  const allRates = typeof payload?.conversion_rates === "object" && payload.conversion_rates ? (payload.conversion_rates as Record<string, number>) : {};
+
+  // Filter to only requested quote currencies
+  const filteredRates = Object.fromEntries(
+    quotes
+      .map((quote) => {
+        const rateValue = allRates[quote];
+        return [quote, rateValue];
+      })
+      .filter((entry): entry is [string, number] => Number.isFinite(entry[1])),
+  );
+
+  return {
+    base,
+    date: null,
+    rates: filteredRates,
+    source: "exchangerate-api",
   };
 }
 

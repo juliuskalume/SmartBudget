@@ -136,7 +136,7 @@ export interface ExchangeRateSnapshot {
   base: CurrencyCode;
   date: string | null;
   rates: Record<string, number>;
-  source: "frankfurter" | "fallback";
+  source: "frankfurter" | "exchangerate-api" | "fallback";
 }
 
 export interface BalancePurchasingPowerShift {
