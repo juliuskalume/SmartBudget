@@ -61,6 +61,9 @@ export function AppShell({
   onOpenSupportComposer,
   onShareApp,
   onDeleteAccount,
+  smartSavePlus,
+  onBuyCurrency,
+  onSellCurrency,
 }: {
   session: AppSessionView;
   activeScreen: ScreenKey;
@@ -98,6 +101,9 @@ export function AppShell({
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
   onDeleteAccount: () => Promise<boolean>;
+  smartSavePlus: SmartSavePlusState;
+  onBuyCurrency: (amount: number, currency: CurrencyCode, bankId: string) => void;
+  onSellCurrency: (holdingId: string, amount: number) => void;
 }) {
   const categoryBreakdown = buildCategoryBreakdown(transactions, displayCurrency, exchangeRates);
   const monthlyTrend = buildMonthlyTrend(transactions, 6, displayCurrency, exchangeRates);
@@ -368,9 +374,9 @@ function renderScreen({
           smartSaveGoal={smartSaveGoal}
           onUpdateGoal={onUpdateGoal}
           onUpdateTargetCurrency={onUpdateTargetCurrency}
-          smartSavePlus={cloudState.smartSavePlus}
-          onBuyCurrency={buyProtectedCurrency}
-          onSellCurrency={sellProtectedCurrency}
+          smartSavePlus={smartSavePlus}
+          onBuyCurrency={onBuyCurrency}
+          onSellCurrency={onSellCurrency}
         />
       );
     case "advice":
