@@ -373,7 +373,6 @@ function renderScreen({
           exchangeRates={exchangeRates}
           smartSaveGoal={smartSaveGoal}
           onUpdateGoal={onUpdateGoal}
-          onUpdateTargetCurrency={onUpdateTargetCurrency}
           smartSavePlus={smartSavePlus}
           onBuyCurrency={onBuyCurrency}
           onSellCurrency={onSellCurrency}
@@ -385,9 +384,9 @@ function renderScreen({
           summary={summary}
           adviceCards={adviceCards}
           insights={insights}
-          defaultWhatIfAmountUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD", summary.currency, exchangeRates) : 100}
-          investableBalanceUsd={protectedSavings > 0 ? convertCurrency(protectedSavings, "USD", summary.currency, exchangeRates) : 0}
-          isBackedBySavings={protectedSavings > 0}
+          defaultWhatIfAmountUsd={safeSavings > 0 ? convertCurrency(safeSavings, "USD", summary.currency, exchangeRates) : 100}
+          investableBalanceUsd={safeSavings > 0 ? convertCurrency(safeSavings, "USD", summary.currency, exchangeRates) : 0}
+          isBackedBySavings={safeSavings > 0}
           isRefreshingAdvice={isRefreshingAdvice}
           onRefreshAdvice={onRefreshAdvice}
         />
