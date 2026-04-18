@@ -42,7 +42,6 @@ import type {
   ExchangeRateSnapshot,
   ManualTransactionDraft,
   ScreenKey,
-  StableCurrencyCode,
   Transaction,
 } from "./types";
 import { AppShell } from "./ui/shell";
@@ -514,7 +513,7 @@ function App() {
     setCloudState((current) => ({ ...current, smartSaveGoal: value }));
   }
 
-  function updateTargetCurrency(value: StableCurrencyCode) {
+  function updateTargetCurrency(value: CurrencyCode) {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
   }
 

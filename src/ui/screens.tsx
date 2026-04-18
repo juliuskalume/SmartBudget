@@ -38,7 +38,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { Bar, BarChart, Cell, CartesianGrid, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { targetCurrencies } from "../lib/demo";
 import {
   buildCategoryBreakdown,
   buildMonthlyTrend,
@@ -62,7 +61,6 @@ import type {
   MarketInsights,
   ManualTransactionDraft,
   ScreenKey,
-  StableCurrencyCode,
   Transaction,
   WhatIfAssetPerformance,
   WhatIfPeriod,
@@ -968,16 +966,17 @@ export function SmartSaveScreen({
   protectedSavings: number;
   convertedSavings: number;
   projection: ReturnType<typeof projectSavings>;
-  targetCurrency: StableCurrencyCode;
+  targetCurrency: CurrencyCode;
   exchangeRates: ExchangeRateSnapshot | null;
   smartSaveGoal: number;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: StableCurrencyCode) => void;
+  onUpdateTargetCurrency: (value: CurrencyCode) => void;
 }) {
   const projectedYear = projection[projection.length - 1];
   const projectionFiveYears = projectedYear.baseValue + summary.cashFlow * 48;
   const [manualAmount, setManualAmount] = useState(String(Math.max(200, Math.round(protectedSavings || 200))));
   const manualNumber = Number(manualAmount);
+  const currencyChoices = getCurrencyChoices(summary.currency);
   const manualConverted = Number.isFinite(manualNumber) ? convertCurrency(manualNumber, targetCurrency, summary.currency, exchangeRates) : 0;
 
   return (
@@ -1004,7 +1003,7 @@ export function SmartSaveScreen({
       </section>
 
       <section className="chart-grid">
-        <Panel title="Conversion simulator" subtitle="Choose a stable currency and see the result instantly.">
+        <Panel title="Conversion simulator" subtitle="Choose a target currency and see the result instantly.">
           <div className="stack">
             <div className="converter-grid">
               <label className="field">
@@ -1020,8 +1019,8 @@ export function SmartSaveScreen({
               </label>
               <label className="field">
                 <span>Target currency</span>
-                <select className="input" value={targetCurrency} onChange={(event) => onUpdateTargetCurrency(event.target.value as StableCurrencyCode)}>
-                  {targetCurrencies.map((currency) => (
+                <select className="input" value={targetCurrency} onChange={(event) => onUpdateTargetCurrency(event.target.value)}>
+                  {currencyChoices.map((currency) => (
                     <option key={currency} value={currency}>
                       {currency}
                     </option>

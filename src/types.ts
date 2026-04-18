@@ -1,5 +1,5 @@
 export type CurrencyCode = string;
-export type StableCurrencyCode = "USD" | "EUR";
+export type StableCurrencyCode = CurrencyCode;
 
 export type Category =
   | "Supermarket"

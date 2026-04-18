@@ -3,11 +3,11 @@ import { Home, Lightbulb, PiggyBank, ReceiptText, TrendingUp } from "lucide-reac
 import type {
   AdviceCard,
   BalancePurchasingPowerShift,
+  CurrencyCode,
   ExchangeRateSnapshot,
   FinancialSummary,
   ManualTransactionDraft,
   ScreenKey,
-  StableCurrencyCode,
   Transaction,
 } from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
@@ -74,7 +74,7 @@ export function AppShell({
   protectedSavings: number;
   convertedSavings: number;
   projection: ReturnType<typeof projectSavings>;
-  targetCurrency: StableCurrencyCode;
+  targetCurrency: CurrencyCode;
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
@@ -91,7 +91,7 @@ export function AppShell({
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: StableCurrencyCode) => void;
+  onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
@@ -274,7 +274,7 @@ function renderScreen({
   protectedSavings: number;
   convertedSavings: number;
   projection: ReturnType<typeof projectSavings>;
-  targetCurrency: StableCurrencyCode;
+  targetCurrency: CurrencyCode;
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
   isRefreshingAdvice: boolean;
@@ -288,7 +288,7 @@ function renderScreen({
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: StableCurrencyCode) => void;
+  onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onImportNativeSms: () => void;
   onRefreshAdvice: () => void;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;

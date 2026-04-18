@@ -4,7 +4,6 @@ import type {
   CurrencyCode,
   ExchangeRateSnapshot,
   FinancialSummary,
-  StableCurrencyCode,
   Transaction,
   TransactionKind,
 } from "../types";
@@ -336,7 +335,7 @@ export function formatDateLabel(date: string) {
 
 export function convertCurrency(
   amount: number,
-  targetCurrency: StableCurrencyCode,
+  targetCurrency: CurrencyCode,
   baseCurrency: CurrencyCode = "TRY",
   exchangeRates?: ExchangeRateSnapshot | null,
 ) {

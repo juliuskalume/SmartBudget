@@ -1,5 +1,6 @@
 import type { BalancePurchasingPowerShift } from "../types";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, type CountryOption } from "./country-data";
+import { normalizeCurrencyCode } from "./exchange-rates";
 
 const countryMap = new Map(COUNTRY_OPTIONS.map((country) => [country.code, country]));
 
@@ -67,5 +68,12 @@ export function getBalancePurchasingPowerShift(countryCode?: string | null): Bal
 }
 
 export function getCurrencyChoices(localCurrency: string) {
-  return Array.from(new Set([localCurrency.toUpperCase(), "TRY", "USD", "EUR"]));
+  const normalizedLocal = normalizeCurrencyCode(localCurrency, "USD");
+  const currencies = new Set<string>([normalizedLocal]);
+
+  for (const country of COUNTRY_OPTIONS) {
+    currencies.add(normalizeCurrencyCode(country.currency, normalizedLocal));
+  }
+
+  return [normalizedLocal, ...Array.from(currencies).filter((currency) => currency !== normalizedLocal).sort()];
 }
