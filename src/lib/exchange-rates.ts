@@ -67,12 +67,9 @@ async function fetchFromFrankfurter(base: string, quotes: string[]): Promise<Exc
 }
 
 async function fetchFromExchangeRateApi(base: string, quotes: string[]): Promise<ExchangeRateSnapshot> {
-  const apiKey = import.meta.env.VITE_EXCHANGERATE_API_KEY;
-  if (!apiKey) {
-    throw new Error("Exchange Rate API key is not configured.");
-  }
-
-  const url = `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${base}`;
+  // Call the server endpoint instead of the API directly (API key stays server-side)
+  const quotesParam = quotes.join(",");
+  const url = `/api/exchange-rates?base=${encodeURIComponent(base)}&quotes=${encodeURIComponent(quotesParam)}`;
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -81,12 +78,7 @@ async function fetchFromExchangeRateApi(base: string, quotes: string[]): Promise
 
   const payload = await response.json();
 
-  // Check for API errors
-  if (payload.result === "error") {
-    throw new Error(`Exchange Rate API error: ${payload["error-type"]}.`);
-  }
-
-  const allRates = typeof payload?.conversion_rates === "object" && payload.conversion_rates ? (payload.conversion_rates as Record<string, number>) : {};
+  const allRates = typeof payload?.rates === "object" && payload.rates ? (payload.rates as Record<string, number>) : {};
 
   // Filter to only requested quote currencies
   const filteredRates = Object.fromEntries(
