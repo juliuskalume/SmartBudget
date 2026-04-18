@@ -367,6 +367,11 @@ function App() {
       transactions: cloneDemoTransactions(),
       smartSaveGoal: DEFAULT_SMART_SAVE_GOAL,
       targetCurrency: "USD",
+      smartSavePlus: {
+        protectedHoldings: [],
+        currencyTransactions: [],
+        totalProtectedValue: 0,
+      },
     };
 
     appliedCloudUserIdRef.current = null;

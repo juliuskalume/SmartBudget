@@ -84,6 +84,21 @@ export function normalizeCloudState(value: unknown): CloudState {
       : [],
     smartSaveGoal: typeof parsed.smartSaveGoal === "number" ? parsed.smartSaveGoal : DEFAULT_SMART_SAVE_GOAL,
     targetCurrency: normalizeCurrencyCode(typeof parsed.targetCurrency === "string" ? parsed.targetCurrency : "USD", "USD"),
+    smartSavePlus: normalizeSmartSavePlusState(parsed.smartSavePlus),
+  };
+}
+
+function normalizeSmartSavePlusState(value: unknown): SmartSavePlusState {
+  if (!value || typeof value !== "object") {
+    return createDefaultCloudState().smartSavePlus;
+  }
+
+  const parsed = value as Partial<SmartSavePlusState>;
+
+  return {
+    protectedHoldings: Array.isArray(parsed.protectedHoldings) ? parsed.protectedHoldings : [],
+    currencyTransactions: Array.isArray(parsed.currencyTransactions) ? parsed.currencyTransactions : [],
+    totalProtectedValue: typeof parsed.totalProtectedValue === "number" ? parsed.totalProtectedValue : 0,
   };
 }
 
