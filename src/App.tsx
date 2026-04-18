@@ -34,7 +34,17 @@ import {
 } from "./lib/finance";
 import { getBalancePurchasingPowerShift, getCountryByCode, getCountryCurrency, getCountryOptions, inferCountryCodeFromLocale } from "./lib/countries";
 import { buildFallbackExchangeRates, fetchExchangeRates, normalizeCurrencyCode } from "./lib/exchange-rates";
-import type { AdviceCard, CurrencyCode, ExchangeRateSnapshot, ManualTransactionDraft, ScreenKey, StableCurrencyCode, Transaction } from "./types";
+import { fetchBalancePurchasingPowerShift } from "./lib/inflation";
+import type {
+  AdviceCard,
+  BalancePurchasingPowerShift,
+  CurrencyCode,
+  ExchangeRateSnapshot,
+  ManualTransactionDraft,
+  ScreenKey,
+  StableCurrencyCode,
+  Transaction,
+} from "./types";
 import { AppShell } from "./ui/shell";
 import { AuthScreen, PermissionScreen } from "./ui/auth";
 import { Panel, Toast } from "./ui/shared";
@@ -80,6 +90,9 @@ function App() {
   const [aiAdvice, setAiAdvice] = useState<AdviceCard[] | null>(null);
   const [exchangeRates, setExchangeRates] = useState<ExchangeRateSnapshot | null>(() =>
     buildFallbackExchangeRates(getCountryCurrency(inferCountryCodeFromLocale()), ["USD", "EUR", "TRY"]),
+  );
+  const [balanceShift, setBalanceShift] = useState<BalancePurchasingPowerShift | null>(() =>
+    getBalancePurchasingPowerShift(inferCountryCodeFromLocale()),
   );
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
@@ -296,6 +309,27 @@ function App() {
     };
   }, [cloudState.targetCurrency, cloudState.transactions, selectedCountryCode, session?.localCurrency]);
 
+  useEffect(() => {
+    const countryCode = session?.countryCode ?? selectedCountryCode;
+    let cancelled = false;
+
+    setBalanceShift(getBalancePurchasingPowerShift(countryCode));
+
+    void fetchBalancePurchasingPowerShift(countryCode)
+      .then((nextShift) => {
+        if (!cancelled && nextShift) {
+          setBalanceShift(nextShift);
+        }
+      })
+      .catch(() => {
+        // Keep the bundled monthly snapshot when the live inflation feed is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCountryCode, session?.countryCode]);
+
   const summary = computeSummary(cloudState.transactions, displayCurrency, exchangeRates);
   const categoryBreakdown = buildCategoryBreakdown(cloudState.transactions, displayCurrency, exchangeRates);
   const monthlyTrend = buildMonthlyTrend(cloudState.transactions, 6, displayCurrency, exchangeRates);
@@ -308,7 +342,6 @@ function App() {
   const projection = projectSavings(protectedSavings, Math.max(summary.cashFlow, 0), 12, displayCurrency, exchangeRates);
   const goalProgress =
     cloudState.smartSaveGoal > 0 ? Math.max(0, Math.min(100, (safeSavings / cloudState.smartSaveGoal) * 100)) : 0;
-  const balanceShift = getBalancePurchasingPowerShift(session?.countryCode ?? selectedCountryCode);
 
   function flashMessage(type: Flash["type"], message: string) {
     setFlash({ type, message });

@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { categorizeSmsText, generateAdviceCards } from "./server/ai.js";
 import { deleteAuthenticatedAccount } from "./server/account.js";
+import { buildBalancePurchasingPowerShift } from "./server/inflation.js";
 import { buildInvestmentRecommendations, buildMarketInsights, buildWhatIfScenario } from "./server/markets.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -106,6 +107,23 @@ async function startServer() {
     } catch (error) {
       console.error("Account deletion error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Unable to delete account" });
+    }
+  });
+
+  app.get("/api/inflation/current", async (req, res) => {
+    try {
+      const countryCode = typeof req.query.country === "string" ? req.query.country : "";
+      const result = await buildBalancePurchasingPowerShift(countryCode);
+
+      if (!result) {
+        res.status(404).json({ error: "Inflation data is unavailable for this country." });
+        return;
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Inflation error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Unable to load inflation data" });
     }
   });
 

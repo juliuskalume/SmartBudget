@@ -1,3 +1,4 @@
+import type { BalancePurchasingPowerShift } from "../types";
 import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, type CountryOption } from "./country-data";
 
 const countryMap = new Map(COUNTRY_OPTIONS.map((country) => [country.code, country]));
@@ -48,18 +49,20 @@ export function formatInflationMonth(month: string | null) {
   }).format(value);
 }
 
-export function getBalancePurchasingPowerShift(countryCode?: string | null) {
+export function getBalancePurchasingPowerShift(countryCode?: string | null): BalancePurchasingPowerShift | null {
   const country = getCountryByCode(countryCode);
   if (country.latestMonthlyInflationPct === null) {
     return null;
   }
 
   return {
-    country,
+    countryCode: country.code,
+    countryName: country.name,
     latestMonth: formatInflationMonth(country.latestInflationMonth),
     inflationPct: country.latestMonthlyInflationPct,
     purchasingPowerShiftPct: -country.latestMonthlyInflationPct,
     isIncrease: country.latestMonthlyInflationPct <= 0,
+    source: "bundled",
   };
 }
 

@@ -53,6 +53,7 @@ import {
 import { getCountryOptions, getCurrencyChoices } from "../lib/countries";
 import type {
   AdviceCard,
+  BalancePurchasingPowerShift,
   Category,
   CurrencyCode,
   ExchangeRateSnapshot,
@@ -154,7 +155,7 @@ export function DashboardScreen({
   recentTransactions: Transaction[];
   displayCurrency: string;
   exchangeRates: ExchangeRateSnapshot | null;
-  balanceShift: { latestMonth: string | null; inflationPct: number; purchasingPowerShiftPct: number; isIncrease: boolean } | null;
+  balanceShift: BalancePurchasingPowerShift | null;
   insights: string[];
   isAndroidNative: boolean;
   goalProgress: number;

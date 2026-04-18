@@ -1,6 +1,15 @@
 import type { ComponentType } from "react";
 import { Home, Lightbulb, PiggyBank, ReceiptText, TrendingUp } from "lucide-react";
-import type { AdviceCard, ExchangeRateSnapshot, FinancialSummary, ManualTransactionDraft, ScreenKey, StableCurrencyCode, Transaction } from "../types";
+import type {
+  AdviceCard,
+  BalancePurchasingPowerShift,
+  ExchangeRateSnapshot,
+  FinancialSummary,
+  ManualTransactionDraft,
+  ScreenKey,
+  StableCurrencyCode,
+  Transaction,
+} from "../types";
 import { buildCategoryBreakdown, buildMonthlyTrend, buildWeeklyTrend, convertCurrency, projectSavings } from "../lib/finance";
 import { AdviceScreen, AnalysisScreen, DashboardScreen, ProfileScreen, SmartSaveScreen, TransactionsScreen } from "./screens";
 
@@ -58,7 +67,7 @@ export function AppShell({
   transactions: Transaction[];
   displayCurrency: string;
   exchangeRates: ExchangeRateSnapshot | null;
-  balanceShift: { latestMonth: string | null; inflationPct: number; purchasingPowerShiftPct: number; isIncrease: boolean } | null;
+  balanceShift: BalancePurchasingPowerShift | null;
   isAndroidNative: boolean;
   goalProgress: number;
   safeSavings: number;
@@ -258,7 +267,7 @@ function renderScreen({
   transactions: Transaction[];
   displayCurrency: string;
   exchangeRates: ExchangeRateSnapshot | null;
-  balanceShift: { latestMonth: string | null; inflationPct: number; purchasingPowerShiftPct: number; isIncrease: boolean } | null;
+  balanceShift: BalancePurchasingPowerShift | null;
   isAndroidNative: boolean;
   goalProgress: number;
   safeSavings: number;

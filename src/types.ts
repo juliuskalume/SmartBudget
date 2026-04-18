@@ -138,3 +138,13 @@ export interface ExchangeRateSnapshot {
   rates: Record<string, number>;
   source: "frankfurter" | "fallback";
 }
+
+export interface BalancePurchasingPowerShift {
+  countryCode: string;
+  countryName: string;
+  latestMonth: string | null;
+  inflationPct: number;
+  purchasingPowerShiftPct: number;
+  isIncrease: boolean;
+  source: "worldbank-gem" | "bundled";
+}

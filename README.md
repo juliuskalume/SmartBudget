@@ -8,6 +8,7 @@ SmartBudget is a cloud-backed personal finance app for students. It combines SMS
 - Supabase auth and per-user cloud storage
 - Groq-powered AI endpoints for categorization and advice
 - Yahoo-powered live market screening for what-if analysis and investment suggestions
+- World Bank GEM monthly CPI feed for live purchasing-power impact
 - Capacitor Android wrapper for native SMS import
 
 SmartBudget uses a cached Yahoo market screen across 100 curated instruments by default, with Twelve Data kept as a secondary backup.
@@ -36,6 +37,7 @@ npm run dev
 ```
 
 The local server provides the `/api/ai/*` routes used by the app.
+It also serves `/api/inflation/current`, which reads the latest monthly CPI index from the World Bank GEM source and falls back to the bundled country snapshot only when the live feed is unavailable.
 
 ## Supabase
 
@@ -68,7 +70,7 @@ Use these environment variables in Vercel:
 - `TWELVE_DATA_API_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-Vercel will serve the Vite build and the serverless functions in `api/ai/*`.
+Vercel will serve the Vite build and the serverless functions in `api/*`.
 
 ## Android
 
