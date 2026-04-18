@@ -566,6 +566,30 @@ select.input {
   line-height: 1.55;
 }
 
+.privacy-card__legal {
+  margin-top: 0.55rem;
+}
+
+.legal-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+  font-size: 0.82rem;
+  color: var(--sb-on-surface-variant);
+}
+
+.legal-links a {
+  color: var(--sb-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15rem;
+}
+
+.legal-links a:hover {
+  color: #fff68e;
+}
+
 .phone-mockup {
   position: relative;
   border-radius: 32px 84px 32px 32px;
@@ -3193,6 +3217,23 @@ h6 {
   color: var(--sb-on-surface-variant);
   line-height: 1.45;
   font-size: 0.82rem;
+}
+
+.profile-legal-links {
+  margin-top: 0.95rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.profile-legal-links strong {
+  display: block;
+  color: var(--sb-on-surface);
+}
+
+.profile-legal-links p {
+  margin: 0.35rem 0 0;
+  color: var(--sb-on-surface-variant);
+  font-size: 0.84rem;
 }
 
 .profile-action-button--danger {

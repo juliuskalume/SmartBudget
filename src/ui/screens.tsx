@@ -2026,6 +2026,20 @@ export function ProfileScreen({
                 </div>
               </button>
             </div>
+
+            <div className="profile-legal-links">
+              <strong>Legal</strong>
+              <p>Review how SmartBudget handles data and the terms for using the app.</p>
+              <div className="legal-links">
+                <a href="/privacy.html" target="_blank" rel="noreferrer">
+                  Privacy Policy
+                </a>
+                <span aria-hidden="true">•</span>
+                <a href="/terms.html" target="_blank" rel="noreferrer">
+                  Terms of Use
+                </a>
+              </div>
+            </div>
           </Panel>
 
           <Panel title="Account actions" subtitle="Leave the session or permanently delete the account.">
