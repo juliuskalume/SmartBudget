@@ -963,7 +963,6 @@ export function SmartSaveScreen({
   exchangeRates,
   smartSaveGoal,
   onUpdateGoal,
-  onUpdateTargetCurrency,
   smartSavePlus,
   onBuyCurrency,
   onSellCurrency,
@@ -978,17 +977,13 @@ export function SmartSaveScreen({
   exchangeRates: ExchangeRateSnapshot | null;
   smartSaveGoal: number;
   onUpdateGoal: (value: number) => void;
-  onUpdateTargetCurrency: (value: CurrencyCode) => void;
   smartSavePlus: SmartSavePlusState;
   onBuyCurrency: (amount: number, currency: CurrencyCode, bankId: string) => void;
   onSellCurrency: (holdingId: string, amount: number) => void;
 }) {
   const projectedYear = projection[projection.length - 1];
   const projectionFiveYears = projectedYear.baseValue + summary.cashFlow * 48;
-  const [manualAmount, setManualAmount] = useState(String(Math.max(200, Math.round(protectedSavings || 200))));
-  const manualNumber = Number(manualAmount);
   const currencyChoices = getCurrencyChoices(summary.currency);
-  const manualConverted = Number.isFinite(manualNumber) ? convertCurrency(manualNumber, targetCurrency, summary.currency, exchangeRates) : 0;
 
   // Smart Save+ state
   const [activeTab, setActiveTab] = useState<"overview" | "buy" | "sell">("overview");
@@ -1025,46 +1020,287 @@ export function SmartSaveScreen({
       </section>
 
       <section className="chart-grid">
-        <Panel title="Conversion simulator" subtitle="Choose a target currency and see the result instantly.">
+        <Panel title="Smart Save+" subtitle="Buy and sell currencies to protect against local currency fluctuations.">
           <div className="stack">
-            <div className="converter-grid">
-              <label className="field">
-                <span>Amount in {summary.currency}</span>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  step="1"
-                  value={manualAmount}
-                  onChange={(event) => setManualAmount(event.target.value)}
-                />
-              </label>
-              <label className="field">
-                <span>Target currency</span>
-                <select className="input" value={targetCurrency} onChange={(event) => onUpdateTargetCurrency(event.target.value)}>
-                  {currencyChoices.map((currency) => (
-                    <option key={currency} value={currency}>
-                      {currency}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="tab-buttons">
+              <button
+                type="button"
+                className={`tab-button ${activeTab === "overview" ? "tab-button--active" : ""}`}
+                onClick={() => setActiveTab("overview")}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${activeTab === "buy" ? "tab-button--active" : ""}`}
+                onClick={() => setActiveTab("buy")}
+              >
+                Buy Currency
+              </button>
+              <button
+                type="button"
+                className={`tab-button ${activeTab === "sell" ? "tab-button--active" : ""}`}
+                onClick={() => setActiveTab("sell")}
+              >
+                Sell Currency
+              </button>
             </div>
 
-            <div className="converter-result">
-              <span>Estimated value</span>
-              <strong>{formatMoney(manualConverted, targetCurrency)}</strong>
-              <p>No real money transfer occurs in this prototype.</p>
-            </div>
+            {activeTab === "overview" && (
+              <div className="stack">
+                <div className="smart-save-overview-text">
+                  <p><strong>Total Protected Value:</strong> {formatMoney(protectedSavings, summary.currency)}</p>
+                  <p><strong>Available to Protect:</strong> {formatMoney(safeSavings - protectedSavings, summary.currency)}</p>
+                  <p><strong>Active Holdings:</strong> {smartSavePlus.protectedHoldings.length} currencies</p>
+                  <p><strong>Total Transactions:</strong> {smartSavePlus.currencyTransactions.length}</p>
+                </div>
 
-            <button
-              className="button button--secondary"
-              type="button"
-              onClick={() => setManualAmount(String(Math.max(200, Math.round(protectedSavings || 200))))}
-            >
-              <ArrowRightLeft size={16} />
-              Use available savings
-            </button>
+                {smartSavePlus.protectedHoldings.length > 0 && (
+                  <Panel title="Current Holdings" subtitle="Your protected currency positions">
+                    <div className="holdings-list">
+                      {smartSavePlus.protectedHoldings.map((holding) => {
+                        const bank = getBankById(holding.bankId);
+                        const currentValue = convertCurrency(holding.amount, summary.currency, holding.currency, exchangeRates);
+                        const gainLoss = currentValue - holding.purchaseAmount;
+                        const gainLossPercent = ((currentValue - holding.purchaseAmount) / holding.purchaseAmount) * 100;
+
+                        return (
+                          <div key={holding.id} className="holding-item">
+                            <div className="holding-header">
+                              <span className="holding-currency">{holding.currency}</span>
+                              <span className="holding-bank">{bank?.name || "Unknown Bank"}</span>
+                            </div>
+                            <div className="holding-details">
+                              <div className="holding-amount">
+                                <span>Amount: {formatMoney(holding.amount, holding.currency)}</span>
+                                <span>Value: {formatMoney(currentValue, summary.currency)}</span>
+                              </div>
+                              <div className="holding-performance">
+                                <span className={gainLoss >= 0 ? "positive" : "negative"}>
+                                  {gainLoss >= 0 ? "+" : ""}{formatMoney(gainLoss, summary.currency)} ({gainLossPercent >= 0 ? "+" : ""}{gainLossPercent.toFixed(2)}%)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Panel>
+                )}
+
+                {smartSavePlus.currencyTransactions.length > 0 && (
+                  <Panel title="Transaction History" subtitle="Your currency trading activity">
+                    <div className="transactions-list">
+                      {smartSavePlus.currencyTransactions.slice(-5).reverse().map((txn) => {
+                        const bank = getBankById(txn.bankId);
+                        return (
+                          <div key={txn.id} className="transaction-item">
+                            <div className="transaction-header">
+                              <span className={`transaction-type transaction-type--${txn.type}`}>
+                                {txn.type.toUpperCase()}
+                              </span>
+                              <span className="transaction-date">{new Date(txn.date).toLocaleDateString()}</span>
+                            </div>
+                            <div className="transaction-details">
+                              <span>{formatMoney(txn.amount, txn.currency)} @ {formatMoney(txn.exchangeRate, summary.currency)}/unit</span>
+                              <span>{bank?.name || "Unknown Bank"}</span>
+                              <span>{formatMoney(txn.localAmount, summary.currency)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Panel>
+                )}
+              </div>
+            )}
+
+            {activeTab === "buy" && (
+              <div className="stack">
+                <Panel title="Buy Currency" subtitle="Convert your local currency to stable currencies">
+                  <div className="stack">
+                    <div className="converter-grid">
+                      <label className="field">
+                        <span>Amount to invest ({summary.currency})</span>
+                        <input
+                          className="input"
+                          type="number"
+                          min={1}
+                          step="1"
+                          value={buyAmount}
+                          onChange={(e) => setBuyAmount(e.target.value)}
+                          placeholder="Enter amount"
+                        />
+                      </label>
+                      <label className="field">
+                        <span>Target currency</span>
+                        <select
+                          className="input"
+                          value={buyCurrency}
+                          onChange={(e) => setBuyCurrency(e.target.value)}
+                        >
+                          {currencyChoices.filter(c => c !== summary.currency).map((currency) => (
+                            <option key={currency} value={currency}>
+                              {currency}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <label className="field">
+                      <span>Select Bank</span>
+                      <select
+                        className="input"
+                        value={selectedBank}
+                        onChange={(e) => setSelectedBank(e.target.value)}
+                      >
+                        <option value="">Choose a bank</option>
+                        {availableBanks.map((bank) => (
+                          <option key={bank.id} value={bank.id}>
+                            {bank.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {selectedBankDetails && (
+                      <div className="bank-details">
+                        <h4>{selectedBankDetails.name}</h4>
+                        <p>{selectedBankDetails.description}</p>
+                        <p><strong>Buy Rate:</strong> {formatMoney(selectedBankDetails.exchangeRates[buyCurrency] || 1, summary.currency)}</p>
+                      </div>
+                    )}
+
+                    <button
+                      className="button button--primary"
+                      disabled={!buyAmount || !buyCurrency || !selectedBank || Number(buyAmount) > (safeSavings - protectedSavings)}
+                      onClick={() => {
+                        if (buyAmount && buyCurrency && selectedBank) {
+                          onBuyCurrency(Number(buyAmount), buyCurrency as CurrencyCode, selectedBank);
+                          setBuyAmount("");
+                          setSelectedBank("");
+                          setActiveTab("overview");
+                        }
+                      }}
+                    >
+                      Buy {buyCurrency}
+                    </button>
+
+                    {Number(buyAmount) > (safeSavings - protectedSavings) && (
+                      <p className="error-text">
+                        Insufficient funds. Available: {formatMoney(safeSavings - protectedSavings, summary.currency)}
+                      </p>
+                    )}
+                  </div>
+                </Panel>
+              </div>
+            )}
+
+            {activeTab === "sell" && (
+              <div className="stack">
+                <Panel title="Sell Currency" subtitle="Convert your protected currencies back to local currency">
+                  {smartSavePlus.protectedHoldings.length === 0 ? (
+                    <p>No holdings available to sell.</p>
+                  ) : (() => {
+                    const selectedHolding = smartSavePlus.protectedHoldings.find((h) => h.id === sellHoldingId);
+                    const maxAmount = selectedHolding?.amount || 0;
+
+                    return (
+                      <div className="stack">
+                        <label className="field">
+                          <span>Select Holding</span>
+                          <select
+                            className="input"
+                            value={sellHoldingId}
+                            onChange={(e) => setSellHoldingId(e.target.value)}
+                          >
+                            <option value="">Choose a holding</option>
+                            {smartSavePlus.protectedHoldings.map((holding) => {
+                              const bank = getBankById(holding.bankId);
+                              return (
+                                <option key={holding.id} value={holding.id}>
+                                  {holding.currency} - {formatMoney(holding.amount, holding.currency)} ({bank?.name})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </label>
+
+                        {selectedHolding && (() => {
+                          const holding = selectedHolding;
+                          const bank = getBankById(holding.bankId);
+
+                          return (
+                            <div className="stack">
+                              <div className="holding-details-preview">
+                                <h4>{holding.currency} Holding</h4>
+                                <p>Bank: {bank?.name}</p>
+                                <p>Available: {formatMoney(holding.amount, holding.currency)}</p>
+                                <p>Current Value: {formatMoney(
+                                  convertCurrency(holding.amount, summary.currency, holding.currency, exchangeRates),
+                                  summary.currency
+                                )}</p>
+                              </div>
+
+                              <label className="field">
+                                <span>Amount to sell ({holding.currency})</span>
+                                <input
+                                  className="input"
+                                  type="number"
+                                  min={0.01}
+                                  max={maxAmount}
+                                  step="0.01"
+                                  value={sellAmount}
+                                  onChange={(e) => setSellAmount(e.target.value)}
+                                  placeholder={`Max: ${maxAmount.toFixed(2)}`}
+                                />
+                              </label>
+
+                              <div className="sell-preview">
+                                <div className="preview-row">
+                                  <span>You'll receive:</span>
+                                  <strong>
+                                    {formatMoney(
+                                      convertCurrency(Number(sellAmount) || 0, summary.currency, holding.currency, exchangeRates),
+                                      summary.currency
+                                    )}
+                                  </strong>
+                                </div>
+                                <div className="preview-row">
+                                  <span>Current exchange rate:</span>
+                                  <strong>
+                                    1 {holding.currency} = {formatMoney(
+                                      convertCurrency(1, summary.currency, holding.currency, exchangeRates),
+                                      summary.currency
+                                    )}
+                                  </strong>
+                                </div>
+                              </div>
+
+                              <button
+                                className="button button--primary"
+                                disabled={!sellAmount || Number(sellAmount) <= 0 || Number(sellAmount) > maxAmount}
+                                onClick={() => {
+                                  if (sellAmount && sellHoldingId) {
+                                    onSellCurrency(sellHoldingId, Number(sellAmount));
+                                    setSellHoldingId("");
+                                    setSellAmount("");
+                                    setActiveTab("overview");
+                                  }
+                                }}
+                              >
+                                Confirm Sale
+                              </button>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
+                </Panel>
+              </div>
+            )}
           </div>
         </Panel>
 
@@ -1126,316 +1362,6 @@ export function SmartSaveScreen({
         </Panel>
       </section>
 
-      {/* Smart Save+ Section */}
-      <section className="panel">
-        <div className="panel__header">
-          <h3>Smart Save+</h3>
-          <p>Buy and sell currencies to protect against local currency fluctuations</p>
-        </div>
-
-        <div className="tab-buttons">
-          <button
-            className={`tab-button ${activeTab === "overview" ? "tab-button--active" : ""}`}
-            onClick={() => setActiveTab("overview")}
-          >
-            Overview
-          </button>
-          <button
-            className={`tab-button ${activeTab === "buy" ? "tab-button--active" : ""}`}
-            onClick={() => setActiveTab("buy")}
-          >
-            Buy Currency
-          </button>
-          <button
-            className={`tab-button ${activeTab === "sell" ? "tab-button--active" : ""}`}
-            onClick={() => setActiveTab("sell")}
-          >
-            Sell Currency
-          </button>
-        </div>
-
-        {activeTab === "overview" && (
-          <div className="stack">
-            <div className="summary-grid">
-              <div className="summary-card">
-                <span>Total Protected Value</span>
-                <strong>{formatMoney(protectedSavings, summary.currency)}</strong>
-              </div>
-              <div className="summary-card">
-                <span>Available to Protect</span>
-                <strong>{formatMoney(safeSavings - protectedSavings, summary.currency)}</strong>
-              </div>
-              <div className="summary-card">
-                <span>Active Holdings</span>
-                <strong>{smartSavePlus.protectedHoldings.length} currencies</strong>
-              </div>
-              <div className="summary-card">
-                <span>Total Transactions</span>
-                <strong>{smartSavePlus.currencyTransactions.length}</strong>
-              </div>
-            </div>
-
-            {smartSavePlus.protectedHoldings.length > 0 && (
-              <Panel title="Current Holdings" subtitle="Your protected currency positions">
-                <div className="holdings-list">
-                  {smartSavePlus.protectedHoldings.map((holding) => {
-                    const bank = getBankById(holding.bankId);
-                    const currentValue = convertCurrency(holding.amount, summary.currency, holding.currency, exchangeRates);
-                    const gainLoss = currentValue - holding.purchaseAmount;
-                    const gainLossPercent = ((currentValue - holding.purchaseAmount) / holding.purchaseAmount) * 100;
-
-                    return (
-                      <div key={holding.id} className="holding-item">
-                        <div className="holding-header">
-                          <span className="holding-currency">{holding.currency}</span>
-                          <span className="holding-bank">{bank?.name || "Unknown Bank"}</span>
-                        </div>
-                        <div className="holding-details">
-                          <div className="holding-amount">
-                            <span>Amount: {formatMoney(holding.amount, holding.currency)}</span>
-                            <span>Value: {formatMoney(currentValue, summary.currency)}</span>
-                          </div>
-                          <div className="holding-performance">
-                            <span className={gainLoss >= 0 ? "positive" : "negative"}>
-                              {gainLoss >= 0 ? "+" : ""}{formatMoney(gainLoss, summary.currency)} ({gainLossPercent >= 0 ? "+" : ""}{gainLossPercent.toFixed(2)}%)
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Panel>
-            )}
-
-            {smartSavePlus.currencyTransactions.length > 0 && (
-              <Panel title="Transaction History" subtitle="Your currency trading activity">
-                <div className="transactions-list">
-                  {smartSavePlus.currencyTransactions.slice(-5).reverse().map((txn) => {
-                    const bank = getBankById(txn.bankId);
-                    return (
-                      <div key={txn.id} className="transaction-item">
-                        <div className="transaction-header">
-                          <span className={`transaction-type transaction-type--${txn.type}`}>
-                            {txn.type.toUpperCase()}
-                          </span>
-                          <span className="transaction-date">{new Date(txn.date).toLocaleDateString()}</span>
-                        </div>
-                        <div className="transaction-details">
-                          <span>{formatMoney(txn.amount, txn.currency)} @ {formatMoney(txn.exchangeRate, summary.currency)}/unit</span>
-                          <span>{bank?.name || "Unknown Bank"}</span>
-                          <span>{formatMoney(txn.localAmount, summary.currency)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </Panel>
-            )}
-          </div>
-        )}
-
-        {activeTab === "buy" && (
-          <div className="stack">
-            <Panel title="Buy Currency" subtitle="Convert your local currency to stable currencies">
-              <div className="stack">
-                <div className="converter-grid">
-                  <label className="field">
-                    <span>Amount to invest ({summary.currency})</span>
-                    <input
-                      className="input"
-                      type="number"
-                      min={1}
-                      step="1"
-                      value={buyAmount}
-                      onChange={(e) => setBuyAmount(e.target.value)}
-                      placeholder="Enter amount"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Target currency</span>
-                    <select
-                      className="input"
-                      value={buyCurrency}
-                      onChange={(e) => setBuyCurrency(e.target.value)}
-                    >
-                      {currencyChoices.filter(c => c !== summary.currency).map((currency) => (
-                        <option key={currency} value={currency}>
-                          {currency}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <label className="field">
-                  <span>Select Bank</span>
-                  <select
-                    className="input"
-                    value={selectedBank}
-                    onChange={(e) => setSelectedBank(e.target.value)}
-                  >
-                    <option value="">Choose a bank...</option>
-                    {availableBanks.map((bank) => (
-                      <option key={bank.id} value={bank.id}>
-                        {bank.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                {selectedBankDetails && (
-                  <Panel title="Bank Transfer Details" subtitle="Use these details to complete your purchase">
-                    <div className="bank-details">
-                      <div className="detail-row">
-                        <span>Bank Name:</span>
-                        <strong>{selectedBankDetails.name}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>IBAN:</span>
-                        <strong>{selectedBankDetails.iban}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>SWIFT/BIC:</span>
-                        <strong>{selectedBankDetails.swift}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>Description:</span>
-                        <strong>{selectedBankDetails.description}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>Amount to Transfer:</span>
-                        <strong>{formatMoney(Number(buyAmount) || 0, summary.currency)}</strong>
-                      </div>
-                      <div className="detail-row">
-                        <span>Expected {buyCurrency}:</span>
-                        <strong>
-                          {formatMoney(
-                            convertCurrency(Number(buyAmount) || 0, buyCurrency, summary.currency, exchangeRates),
-                            buyCurrency
-                          )}
-                        </strong>
-                      </div>
-                    </div>
-                  </Panel>
-                )}
-
-                <button
-                  className="button button--primary"
-                  disabled={!buyAmount || !buyCurrency || !selectedBank || Number(buyAmount) > (safeSavings - protectedSavings)}
-                  onClick={() => {
-                    if (buyAmount && buyCurrency && selectedBank) {
-                      onBuyCurrency(Number(buyAmount), buyCurrency, selectedBank);
-                      setBuyAmount("");
-                      setSelectedBank("");
-                      setActiveTab("overview");
-                    }
-                  }}
-                >
-                  Confirm Purchase
-                </button>
-
-                {Number(buyAmount) > (safeSavings - protectedSavings) && (
-                  <p className="error-message">
-                    Insufficient funds. Available: {formatMoney(safeSavings - protectedSavings, summary.currency)}
-                  </p>
-                )}
-              </div>
-            </Panel>
-          </div>
-        )}
-
-        {activeTab === "sell" && (
-          <div className="stack">
-            <Panel title="Sell Currency" subtitle="Convert your protected currencies back to local currency">
-              <div className="stack">
-                <label className="field">
-                  <span>Select holding to sell</span>
-                  <select
-                    className="input"
-                    value={sellHoldingId}
-                    onChange={(e) => {
-                      setSellHoldingId(e.target.value);
-                      setSellAmount("");
-                    }}
-                  >
-                    <option value="">Choose a holding...</option>
-                    {smartSavePlus.protectedHoldings.map((holding) => {
-                      const bank = getBankById(holding.bankId);
-                      return (
-                        <option key={holding.id} value={holding.id}>
-                          {formatMoney(holding.amount, holding.currency)} at {bank?.name || "Unknown Bank"}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
-
-                {sellHoldingId && (() => {
-                  const holding = smartSavePlus.protectedHoldings.find(h => h.id === sellHoldingId);
-                  if (!holding) return null;
-
-                  const maxAmount = holding.amount;
-
-                  return (
-                    <div className="stack">
-                      <label className="field">
-                        <span>Amount to sell ({holding.currency})</span>
-                        <input
-                          className="input"
-                          type="number"
-                          min={0.01}
-                          max={maxAmount}
-                          step="0.01"
-                          value={sellAmount}
-                          onChange={(e) => setSellAmount(e.target.value)}
-                          placeholder={`Max: ${maxAmount.toFixed(2)}`}
-                        />
-                      </label>
-
-                      <div className="sell-preview">
-                        <div className="preview-row">
-                          <span>You'll receive:</span>
-                          <strong>
-                            {formatMoney(
-                              convertCurrency(Number(sellAmount) || 0, summary.currency, holding.currency, exchangeRates),
-                              summary.currency
-                            )}
-                          </strong>
-                        </div>
-                        <div className="preview-row">
-                          <span>Current exchange rate:</span>
-                          <strong>
-                            1 {holding.currency} = {formatMoney(
-                              convertCurrency(1, summary.currency, holding.currency, exchangeRates),
-                              summary.currency
-                            )}
-                          </strong>
-                        </div>
-                      </div>
-
-                      <button
-                        className="button button--primary"
-                        disabled={!sellAmount || Number(sellAmount) <= 0 || Number(sellAmount) > maxAmount}
-                        onClick={() => {
-                          if (sellAmount && sellHoldingId) {
-                            onSellCurrency(sellHoldingId, Number(sellAmount));
-                            setSellHoldingId("");
-                            setSellAmount("");
-                            setActiveTab("overview");
-                          }
-                        }}
-                      >
-                        Confirm Sale
-                      </button>
-                    </div>
-                  );
-                })()}
-              </div>
-            </Panel>
-          </div>
-        )}
-      </section>
     </div>
   );
 }
@@ -1533,7 +1459,7 @@ export function AdviceScreen({
 
   useEffect(() => {
     if (normalizeInvestableAmount(investableBalanceUsd) <= 0) {
-      setInvestmentError("Build a positive protected balance first, then SmartBudget can suggest live market assets.");
+      setInvestmentError("Add a positive available savings amount first, then SmartBudget can suggest live market assets.");
       return;
     }
 
@@ -1585,13 +1511,13 @@ export function AdviceScreen({
       <div style={{ order: 2 }}>
         <Panel
           title="Where SmartBudget Would Invest Next"
-          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your protected balance."
+          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your available savings amount."
         >
           <div className="stack">
           <p className="helper-copy">
             {investableBalanceUsd > 0
               ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")}.`
-              : "No protected balance is available yet for live investment suggestions."}
+              : "No available savings amount is set yet for live investment suggestions."}
           </p>
 
           {marketInsights ? <p className="helper-copy">{marketInsights.disclaimer}</p> : null}
@@ -1699,8 +1625,8 @@ export function AdviceScreen({
 
           <p className="helper-copy">
             {isBackedBySavings
-              ? "This starts with your current protected savings converted to USD. Change the amount to test a different scenario."
-              : "No protected savings are available yet, so the simulation starts with a manual USD amount."}
+              ? "This starts with your current available savings converted to USD. Change the amount to test a different scenario."
+              : "No available savings are set yet, so the simulation starts with a manual USD amount."}
           </p>
 
           {whatIfScenario ? (
