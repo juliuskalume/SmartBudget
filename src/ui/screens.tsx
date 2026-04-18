@@ -187,7 +187,7 @@ export function DashboardScreen({
               {balanceShift.purchasingPowerShiftPct >= 0 ? "+" : ""}
               {balanceShift.purchasingPowerShiftPct.toFixed(1)}%
             </span>
-            <small>{balanceShift.latestMonth ? `Purchasing power vs. ${balanceShift.latestMonth}` : "Latest monthly inflation effect"}</small>
+            <small>{balanceShift.latestMonth ? `Purchasing power since ${balanceShift.latestMonth}` : "Latest monthly inflation effect"}</small>
           </div>
         ) : null}
         <div className="balance-card__split">
