@@ -373,7 +373,6 @@ function renderScreen({
           exchangeRates={exchangeRates}
           smartSaveGoal={smartSaveGoal}
           onUpdateGoal={onUpdateGoal}
-          onUpdateTargetCurrency={onUpdateTargetCurrency}
           smartSavePlus={smartSavePlus}
           onBuyCurrency={onBuyCurrency}
           onSellCurrency={onSellCurrency}
