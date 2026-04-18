@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import type { AdviceCard, FinancialSummary, InvestmentHorizon, MarketAssetSnapshot } from "../src/types";
+import type { AdviceCard, FinancialSummary, InvestmentHorizon, MarketAssetSnapshot } from "../src/types.ts";
 
 const groqApiKey = process.env.GROQ_API_KEY?.trim();
 const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;

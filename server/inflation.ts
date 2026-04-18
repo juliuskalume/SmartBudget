@@ -1,5 +1,5 @@
-import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, type CountryOption } from "../src/lib/country-data";
-import type { BalancePurchasingPowerShift } from "../src/types";
+import { COUNTRY_OPTIONS, DEFAULT_COUNTRY_CODE, type CountryOption } from "../src/lib/country-data.ts";
+import type { BalancePurchasingPowerShift } from "../src/types.ts";
 
 const WORLD_BANK_API_BASE_URL = "https://api.worldbank.org/v2";
 const WORLD_BANK_GEM_SOURCE_ID = "15";

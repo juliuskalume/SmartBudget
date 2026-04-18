@@ -7,7 +7,7 @@ import type {
   WhatIfAssetPerformance,
   WhatIfPeriod,
   WhatIfScenario,
-} from "../src/types";
+} from "../src/types.ts";
 
 const YAHOO_SPARK_URL = "https://query1.finance.yahoo.com/v7/finance/spark";
 const TWELVE_DATA_BASE_URL = "https://api.twelvedata.com";
