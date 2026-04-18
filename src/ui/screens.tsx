@@ -1168,7 +1168,10 @@ export function SmartSaveScreen({
                       <div className="bank-details">
                         <h4>{selectedBankDetails.name}</h4>
                         <p>{selectedBankDetails.description}</p>
-                        <p><strong>Buy Rate:</strong> {formatMoney(selectedBankDetails.exchangeRates[buyCurrency] || 1, summary.currency)}</p>
+                        <p>
+                          <strong>Buy Rate:</strong>{" "}
+                          {formatMoney(convertCurrency(1, summary.currency, buyCurrency, exchangeRates), summary.currency)}
+                        </p>
                       </div>
                     )}
 

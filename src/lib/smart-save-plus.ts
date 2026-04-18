@@ -21,7 +21,7 @@ export function buyCurrency(
   exchangeRates: ExchangeRateSnapshot | null,
   state: SmartSavePlusState
 ): SmartSavePlusState {
-  const exchangeRate = convertCurrency(1, currency, localCurrency, exchangeRates);
+  const exchangeRate = convertCurrency(1, localCurrency, currency, exchangeRates);
   const currencyAmount = amount / exchangeRate;
 
   const holding: ProtectedCurrencyHolding = {
