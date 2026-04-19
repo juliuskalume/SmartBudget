@@ -1081,73 +1081,24 @@ export function SmartSaveScreen({
             </ResponsiveContainer>
           </ChartFrame>
         </Panel>
-      </section>
 
-      <section className="dashboard-grid dashboard-grid--bottom">
-        <Panel title="Goal controls" subtitle="Tune the monthly savings objective for the app.">
-          <div className="stack">
-            <label className="field">
-              <span>Goal amount ({summary.currency})</span>
-              <input
-                className="input"
-                type="range"
-                min={100}
-                max={5000}
-                step={50}
-                value={smartSaveGoal}
-                onChange={(event) => onUpdateGoal(Number(event.target.value))}
-              />
-            </label>
-            <div className="range-value-row">
-              <span>Current goal</span>
-              <strong>{formatMoney(smartSaveGoal, summary.currency)}</strong>
-            </div>
-            <div className="goal-progress">
-              <span style={{ width: `${goalProgress}%` }} />
-            </div>
-          </div>
-        </Panel>
+        <Panel title="Smart Save+" subtitle="Buy and sell currencies to protect against local currency fluctuations.">
 
-        <Panel title="Value projection summary" subtitle="What the current amount could become.">
-          <div className="summary-grid">
-            <div className="summary-card">
-              <span>Current savings</span>
-              <strong>{formatMoney(safeSavings, summary.currency)}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Protected now</span>
-              <strong>{formatMoney(protectedSavings, summary.currency)}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Converted now</span>
-              <strong>{formatMoney(convertedSavings, targetCurrency)}</strong>
-            </div>
-          </div>
-        </Panel>
-      </section>
-
-      {/* Smart Save+ Section */}
-      <section className="panel">
-        <div className="panel__header">
-          <h3>Smart Save+</h3>
-          <p>Buy and sell currencies to protect against local currency fluctuations</p>
-        </div>
-
-        <div className="tab-buttons">
+        <div className="segment-switch segment-switch--triple">
           <button
-            className={`tab-button ${activeTab === "overview" ? "tab-button--active" : ""}`}
+            className={`segment-switch__button ${activeTab === "overview" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("overview")}
           >
             Overview
           </button>
           <button
-            className={`tab-button ${activeTab === "buy" ? "tab-button--active" : ""}`}
+            className={`segment-switch__button ${activeTab === "buy" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("buy")}
           >
             Buy Currency
           </button>
           <button
-            className={`tab-button ${activeTab === "sell" ? "tab-button--active" : ""}`}
+            className={`segment-switch__button ${activeTab === "sell" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("sell")}
           >
             Sell Currency
@@ -1435,6 +1386,50 @@ export function SmartSaveScreen({
             </Panel>
           </div>
         )}
+        </Panel>
+      </section>
+
+      <section className="dashboard-grid dashboard-grid--bottom">
+        <Panel title="Goal controls" subtitle="Tune the monthly savings objective for the app.">
+          <div className="stack">
+            <label className="field">
+              <span>Goal amount ({summary.currency})</span>
+              <input
+                className="input"
+                type="range"
+                min={100}
+                max={5000}
+                step={50}
+                value={smartSaveGoal}
+                onChange={(event) => onUpdateGoal(Number(event.target.value))}
+              />
+            </label>
+            <div className="range-value-row">
+              <span>Current goal</span>
+              <strong>{formatMoney(smartSaveGoal, summary.currency)}</strong>
+            </div>
+            <div className="goal-progress">
+              <span style={{ width: `${goalProgress}%` }} />
+            </div>
+          </div>
+        </Panel>
+
+        <Panel title="Value projection summary" subtitle="What the current amount could become.">
+          <div className="summary-grid">
+            <div className="summary-card">
+              <span>Current savings</span>
+              <strong>{formatMoney(safeSavings, summary.currency)}</strong>
+            </div>
+            <div className="summary-card">
+              <span>Protected now</span>
+              <strong>{formatMoney(protectedSavings, summary.currency)}</strong>
+            </div>
+            <div className="summary-card">
+              <span>Converted now</span>
+              <strong>{formatMoney(convertedSavings, targetCurrency)}</strong>
+            </div>
+          </div>
+        </Panel>
       </section>
     </div>
   );
