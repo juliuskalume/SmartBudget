@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
+import { App } from "@capacitor/app";
 import { demoTransactions } from "./lib/demo";
 import {
   consumePendingAndroidSmsMessages,
@@ -110,6 +111,30 @@ function App() {
   useEffect(() => {
     saveDeviceState(deviceState);
   }, [deviceState]);
+
+  // Android back button handling
+  useEffect(() => {
+    if (!isAndroidNative) return;
+
+    const handleBackButton = () => {
+      if (deviceState.activeScreen === "dashboard") {
+        // On dashboard (main screen), show exit confirmation
+        const shouldExit = window.confirm("Are you sure you want to exit SmartBudget?");
+        if (shouldExit) {
+          App.exitApp();
+        }
+      } else {
+        // On any other screen, navigate back to dashboard
+        setDeviceState((current) => ({ ...current, activeScreen: "dashboard" }));
+      }
+    };
+
+    const backButtonListener = App.addListener("backButton", handleBackButton);
+
+    return () => {
+      backButtonListener.remove();
+    };
+  }, [deviceState.activeScreen, isAndroidNative]);
 
   useEffect(() => {
     if (!supabase) {
