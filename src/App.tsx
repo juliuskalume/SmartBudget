@@ -116,24 +116,29 @@ function App() {
   useEffect(() => {
     if (!isAndroidNative) return;
 
-    const handleBackButton = () => {
-      if (deviceState.activeScreen === "dashboard") {
-        // On dashboard (main screen), show exit confirmation
-        const shouldExit = window.confirm("Are you sure you want to exit SmartBudget?");
-        if (shouldExit) {
-          App.exitApp();
+    try {
+      const handleBackButton = () => {
+        if (deviceState.activeScreen === "dashboard") {
+          // On dashboard (main screen), show exit confirmation
+          const shouldExit = window.confirm("Are you sure you want to exit SmartBudget?");
+          if (shouldExit) {
+            App.exitApp();
+          }
+        } else {
+          // On any other screen, navigate back to dashboard
+          setDeviceState((current) => ({ ...current, activeScreen: "dashboard" }));
         }
-      } else {
-        // On any other screen, navigate back to dashboard
-        setDeviceState((current) => ({ ...current, activeScreen: "dashboard" }));
-      }
-    };
+      };
 
-    const backButtonListener = App.addListener("backButton", handleBackButton);
+      const backButtonListener = App.addListener("backButton", handleBackButton);
 
-    return () => {
-      backButtonListener.remove();
-    };
+      return () => {
+        backButtonListener.remove();
+      };
+    } catch (error) {
+      console.error("Failed to setup back button handler:", error);
+      return;
+    }
   }, [deviceState.activeScreen, isAndroidNative]);
 
   useEffect(() => {
