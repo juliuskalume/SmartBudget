@@ -1133,21 +1133,21 @@ export function SmartSaveScreen({
           <p>Buy and sell currencies to protect against local currency fluctuations</p>
         </div>
 
-        <div className="tab-buttons">
+        <div className="segment-switch segment-switch--triple">
           <button
-            className={`button ${activeTab === "overview" ? "button--primary" : "button--secondary"}`}
+            className={`segment-switch__button ${activeTab === "overview" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("overview")}
           >
             Overview
           </button>
           <button
-            className={`button ${activeTab === "buy" ? "button--primary" : "button--secondary"}`}
+            className={`segment-switch__button ${activeTab === "buy" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("buy")}
           >
             Buy Currency
           </button>
           <button
-            className={`button ${activeTab === "sell" ? "button--primary" : "button--secondary"}`}
+            className={`segment-switch__button ${activeTab === "sell" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("sell")}
           >
             Sell Currency
