@@ -326,7 +326,7 @@ export function DashboardScreen({
                 <p>
                   {isAndroidNative
                     ? "New transaction alerts are checked as they arrive. Cash spending can be added manually from the transaction screen."
-                    : "The web app does not ask users to paste SMS. Transactions detected in the Android app appear here once they sync to the same account."}
+                    : "Transactions detected in the Android app appear here once they sync to the same account."}
                 </p>
               </div>
             </div>
@@ -407,6 +407,9 @@ export function DashboardScreen({
           </div>
         )}
       </Panel>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
@@ -499,11 +502,11 @@ export function TransactionsScreen({
             <ScanText size={18} />
           </div>
           <div className="sync-card__content">
-            <strong>{isAndroidNative ? "Incoming transaction alerts are checked automatically" : "SMS pasting is not part of this product"}</strong>
+            <strong>{isAndroidNative ? "Incoming transaction alerts are checked automatically" : "Let the App do the hard work for you!"}</strong>
             <p>
               {isAndroidNative
                 ? "When a new bank or card message arrives, SmartBudget decides whether it is a debit or credit and updates the ledger if it is real transaction activity."
-                : "Users do not paste messages here. Install and use the Android app to detect incoming bank SMS automatically, then review the synced ledger on the web."}
+                : "Install and use the Android app to detect incoming bank SMS automatically, then review the synced ledger on the web."}
             </p>
           </div>
         </div>
@@ -514,8 +517,8 @@ export function TransactionsScreen({
             <strong>{isAndroidNative ? "Live monitoring enabled" : "Android sync required"}</strong>
           </div>
           <div className="composer-meta__field">
-            <span>Fallback</span>
-            <strong>Manual cash entry below</strong>
+            <span>Transaction not detected?</span>
+            <strong>Try manual transaction entry below</strong>
           </div>
         </div>
 
@@ -526,10 +529,6 @@ export function TransactionsScreen({
               {isImportingNativeSms ? "Scanning..." : "Scan existing inbox"}
             </button>
           ) : null}
-          <button className="button button--ghost" type="button" onClick={() => onSetScreen("dashboard")}>
-            <ArrowRightLeft size={16} />
-            Back Home
-          </button>
         </div>
       </Panel>
 
@@ -662,7 +661,6 @@ export function TransactionsScreen({
               }
             }}
           >
-            <BadgeDollarSign size={16} />
             Save Manual Entry
           </button>
         </div>
@@ -829,6 +827,9 @@ export function TransactionsScreen({
           )}
         </div>
       </Panel>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
@@ -948,6 +949,9 @@ export function AnalysisScreen({
           <EmptyState title="No breakdown yet" description="Once expenses are imported, category pressure appears here." />
         )}
       </Panel>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
@@ -1017,7 +1021,7 @@ export function SmartSaveScreen({
             <span>Goal progress</span>
             <strong>{formatPercent(goalProgress)}</strong>
           </div>
-          <div className="summary-chip summary-chip--accent">
+          <div className="summary-chip">
             <span>Protected value</span>
             <strong>{formatMoney(protectedSavings, summary.currency)}</strong>
           </div>
@@ -1062,29 +1066,14 @@ export function SmartSaveScreen({
               type="button"
               onClick={() => setManualAmount(String(Math.max(200, Math.round(protectedSavings || 200))))}
             >
-              <ArrowRightLeft size={16} />
               Use available savings
             </button>
           </div>
         </Panel>
 
-        <Panel title="Projected growth" subtitle="Protected value over the next 12 months.">
-          <ChartFrame height={320}>
-            <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={projection}>
-                <CartesianGrid stroke="rgba(255,253,2,0.12)" vertical={false} />
-                <XAxis dataKey="label" stroke="#d5cc8a" {...chartAxisProps} />
-                <YAxis stroke="#d5cc8a" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value), summary.currency)} />
-                <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value), summary.currency), "Projected value"]} />
-                <Line type="monotone" dataKey="baseValue" stroke="#fffd02" strokeWidth={3} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartFrame>
-        </Panel>
-
         <Panel title="Smart Save+" subtitle="Buy and sell currencies to protect against local currency fluctuations.">
 
-        <div className="segment-switch segment-switch--triple">
+        <div className="segment-switch segment-switch--triple" style={{ marginBottom: "1.5rem" }}>
           <button
             className={`segment-switch__button ${activeTab === "overview" ? "segment-switch__button--active" : ""}`}
             onClick={() => setActiveTab("overview")}
@@ -1387,6 +1376,20 @@ export function SmartSaveScreen({
           </div>
         )}
         </Panel>
+
+        <Panel title="Projected growth" subtitle="Protected value over the next 12 months.">
+          <ChartFrame height={320}>
+            <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={projection}>
+                <CartesianGrid stroke="rgba(255,253,2,0.12)" vertical={false} />
+                <XAxis dataKey="label" stroke="#d5cc8a" {...chartAxisProps} />
+                <YAxis stroke="#d5cc8a" {...chartAxisProps} tickFormatter={(value) => formatMoney(Number(value), summary.currency)} />
+                <Tooltip {...chartTooltipStyle} formatter={(value) => [formatMoney(Number(value), summary.currency), "Projected value"]} />
+                <Line type="monotone" dataKey="baseValue" stroke="#fffd02" strokeWidth={3} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </Panel>
       </section>
 
       <section className="dashboard-grid dashboard-grid--bottom">
@@ -1431,6 +1434,9 @@ export function SmartSaveScreen({
           </div>
         </Panel>
       </section>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
@@ -1640,8 +1646,8 @@ export function AdviceScreen({
 
               <p className="helper-copy">
                 {investmentRecommendations.source === "ai"
-                  ? "Groq ranked the live market screen for your balance and profile before SmartBudget calculated the scenario values."
-                  : "Groq was unavailable, so SmartBudget ranked the live market screen with its local scoring model."}
+                  ? "AI ranked the live market screen for your balance and profile before SmartBudget calculated the scenario values."
+                  : "AI was unavailable, so SmartBudget ranked the live market screen with its local scoring model."}
               </p>
               <p className="helper-copy">{investmentRecommendations.disclaimer}</p>
             </>
@@ -1810,6 +1816,9 @@ export function AdviceScreen({
           </div>
         </Panel>
       </section>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
@@ -2121,6 +2130,10 @@ export function ProfileScreen({
             </div>
           </Panel>
         </section>
+      </div>
+
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
       </div>
 
       {confirmAction ? (

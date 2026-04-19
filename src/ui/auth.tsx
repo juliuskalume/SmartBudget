@@ -44,14 +44,14 @@ export function AuthScreen({
 
   return (
     <div className="auth-layout">
-      <Panel title="SmartBudget" subtitle="Cloud-synced student finance assistant" className="hero-panel auth-hero">
+      <Panel className="hero-panel auth-hero">
         <div className="hero-badge">
           <img className="hero-badge__logo" src="/smartbudgetlogo.png" alt="SmartBudget logo" />
           SmartBudget
         </div>
-        <h1>Manage smart. Save smarter.</h1>
+        <h1>Manage, budget, save.</h1>
         <p>
-          Track student finances from bank SMS, auto-tag expenses with AI, sync everything to your account, and protect spare cash with Smart Save+.
+          Track your finances from bank SMS, auto-tag expenses with AI, sync everything to your account, and protect spare cash with Smart Save+.
         </p>
 
         <div className="hero-stats">
@@ -74,7 +74,7 @@ export function AuthScreen({
             <span>Cloud sync</span>
             <strong>Private account storage</strong>
           </div>
-          <div className="hero-preview__card hero-preview__card--accent">
+          <div className="hero-preview__card">
             <span>First import</span>
             <strong>Starts empty until you add data</strong>
           </div>
@@ -173,6 +173,9 @@ export function AuthScreen({
           </div>
         ) : null}
       </Panel>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
@@ -241,6 +244,9 @@ export function PermissionScreen({
           </div>
         </div>
       </Panel>
+      <div className="text-center text-xs text-gray-500 mt-4 pb-2">
+        <a href="/terms.html" className="hover:underline">terms</a> | <a href="/privacy.html" className="hover:underline">privacy</a>
+      </div>
     </div>
   );
 }
