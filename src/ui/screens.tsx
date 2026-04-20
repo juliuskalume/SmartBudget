@@ -1058,7 +1058,7 @@ export function SmartSaveScreen({
             <div className="converter-result">
               <span>Estimated value</span>
               <strong>{formatMoney(manualConverted, targetCurrency)}</strong>
-              <p>No real money transfer occurs in this prototype.</p>
+              <p>Exchange rates powered by Frankfurter.</p>
             </div>
 
             <button
