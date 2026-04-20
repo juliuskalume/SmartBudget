@@ -314,6 +314,8 @@ function renderScreen({
   onBuyCurrency: (amount: number, currency: CurrencyCode, bankId: string) => void;
   onSellCurrency: (holdingId: string, amount: number) => void;
 }) {
+  const availableSavings = Math.max(safeSavings - protectedSavings, 0);
+
   switch (activeScreen) {
     case "dashboard":
       return (
@@ -385,9 +387,9 @@ function renderScreen({
           summary={summary}
           adviceCards={adviceCards}
           insights={insights}
-          defaultWhatIfAmountUsd={safeSavings > 0 ? convertCurrency(safeSavings, "USD", summary.currency, exchangeRates) : 100}
-          investableBalanceUsd={safeSavings > 0 ? convertCurrency(safeSavings, "USD", summary.currency, exchangeRates) : 0}
-          isBackedBySavings={safeSavings > 0}
+          defaultWhatIfAmountUsd={availableSavings > 0 ? convertCurrency(availableSavings, "USD", summary.currency, exchangeRates) : 100}
+          investableBalanceUsd={availableSavings > 0 ? convertCurrency(availableSavings, "USD", summary.currency, exchangeRates) : 0}
+          isBackedBySavings={availableSavings > 0}
           isRefreshingAdvice={isRefreshingAdvice}
           onRefreshAdvice={onRefreshAdvice}
         />

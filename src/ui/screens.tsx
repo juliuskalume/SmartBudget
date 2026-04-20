@@ -989,7 +989,8 @@ export function SmartSaveScreen({
 }) {
   const projectedYear = projection[projection.length - 1];
   const projectionFiveYears = projectedYear.baseValue + summary.cashFlow * 48;
-  const [manualAmount, setManualAmount] = useState(String(Math.max(200, Math.round(protectedSavings || 200))));
+  const availableSavings = Math.max(safeSavings - protectedSavings, 0);
+  const [manualAmount, setManualAmount] = useState(String(Math.round(availableSavings)));
   const manualNumber = Number(manualAmount);
   const currencyChoices = getCurrencyChoices(summary.currency);
   const manualConverted = Number.isFinite(manualNumber) ? convertCurrency(manualNumber, targetCurrency, summary.currency, exchangeRates) : 0;
@@ -1010,7 +1011,7 @@ export function SmartSaveScreen({
       <section className="hero-strip panel">
         <div className="hero-strip__copy">
           <p className="eyebrow">Value protection</p>
-          <h2>{formatMoney(safeSavings, summary.currency)} available to protect</h2>
+          <h2>{formatMoney(availableSavings, summary.currency)} available to protect</h2>
           <p>
             Smart Save+ simulates moving spare cash into stable currency buckets so savings are less exposed to local
             currency swings.
@@ -1064,7 +1065,7 @@ export function SmartSaveScreen({
             <button
               className="button button--secondary"
               type="button"
-              onClick={() => setManualAmount(String(Math.max(200, Math.round(protectedSavings || 200))))}
+              onClick={() => setManualAmount(String(Math.round(availableSavings)))}
             >
               Use available savings
             </button>
@@ -1103,7 +1104,7 @@ export function SmartSaveScreen({
               </div>
               <div className="summary-card">
                 <span>Available to Protect</span>
-                <strong>{formatMoney(safeSavings - protectedSavings, summary.currency)}</strong>
+                <strong>{formatMoney(availableSavings, summary.currency)}</strong>
               </div>
               <div className="summary-card">
                 <span>Active Holdings</span>
@@ -1262,7 +1263,7 @@ export function SmartSaveScreen({
 
                 <button
                   className="button button--primary"
-                  disabled={!buyAmount || !buyCurrency || !selectedBank || Number(buyAmount) > (safeSavings - protectedSavings)}
+                  disabled={!buyAmount || !buyCurrency || !selectedBank || Number(buyAmount) > availableSavings}
                   onClick={() => {
                     if (buyAmount && buyCurrency && selectedBank) {
                       onBuyCurrency(Number(buyAmount), buyCurrency, selectedBank);
@@ -1275,9 +1276,9 @@ export function SmartSaveScreen({
                   Confirm Purchase
                 </button>
 
-                {Number(buyAmount) > (safeSavings - protectedSavings) && (
+                {Number(buyAmount) > availableSavings && (
                   <p className="error-message">
-                    Insufficient funds. Available: {formatMoney(safeSavings - protectedSavings, summary.currency)}
+                    Insufficient funds. Available: {formatMoney(availableSavings, summary.currency)}
                   </p>
                 )}
               </div>
@@ -1534,7 +1535,7 @@ export function AdviceScreen({
 
   useEffect(() => {
     if (normalizeInvestableAmount(investableBalanceUsd) <= 0) {
-      setInvestmentError("Build a positive protected balance first, then SmartBudget can suggest live market assets.");
+      setInvestmentError("Build a positive available savings balance first, then SmartBudget can suggest live market assets.");
       return;
     }
 
@@ -1586,13 +1587,13 @@ export function AdviceScreen({
       <div style={{ order: 2 }}>
         <Panel
           title="Where SmartBudget Would Invest Next"
-          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against your protected balance."
+          subtitle="Live cross-asset suggestions sourced from the current market screen, then priced against the savings still available in your account."
         >
           <div className="stack">
           <p className="helper-copy">
             {investableBalanceUsd > 0
-              ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")}.`
-              : "No protected balance is available yet for live investment suggestions."}
+              ? `Current investable balance considered: ${formatMoney(investableBalanceUsd, "USD")} from your available savings.`
+              : "No available savings are ready yet for live investment suggestions."}
           </p>
 
           {marketInsights ? <p className="helper-copy">{marketInsights.disclaimer}</p> : null}
@@ -1700,8 +1701,8 @@ export function AdviceScreen({
 
           <p className="helper-copy">
             {isBackedBySavings
-              ? "This starts with your current protected savings converted to USD. Change the amount to test a different scenario."
-              : "No protected savings are available yet, so the simulation starts with a manual USD amount."}
+              ? "This starts with your current available savings converted to USD. Change the amount to test a different scenario."
+              : "No available savings are ready yet, so the simulation starts with a manual USD amount."}
           </p>
 
           {whatIfScenario ? (
