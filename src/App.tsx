@@ -38,6 +38,7 @@ import { buildFallbackExchangeRates, fetchExchangeRates, normalizeCurrencyCode }
 import { fetchBalancePurchasingPowerShift } from "./lib/inflation";
 import { buyCurrency, sellCurrency, calculateTotalProtectedValue } from "./lib/smart-save-plus";
 import { getBanksForCountry } from "./lib/banks";
+import { useTouchHaptics } from "./lib/haptics";
 import type {
   AdviceCard,
   BalancePurchasingPowerShift,
@@ -80,6 +81,7 @@ const SUPPORT_EMAIL = "sentira.official@gmail.com";
 const APP_SHARE_MESSAGE = "Hey, I use SmartBudget to auto track and manage my finances. You can try it too at https://hamid-smart-budget.vercel.app";
 
 function App() {
+  useTouchHaptics();
   const countryOptions = getCountryOptions();
   const [deviceState, setDeviceState] = useState<DeviceState>(() => loadDeviceState());
   const [cloudState, setCloudState] = useState<CloudState>(() => createDefaultCloudState());
