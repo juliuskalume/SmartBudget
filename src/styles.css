@@ -1406,6 +1406,15 @@ select.input {
   line-height: 1.45;
 }
 
+.email-settings-link {
+  color: #ef4444;
+  text-decoration: underline;
+}
+
+.email-settings-link:hover {
+  color: #dc2626;
+}
+
 .filter-tag {
   display: inline-flex;
   align-items: center;
