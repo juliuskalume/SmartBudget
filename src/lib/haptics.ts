@@ -53,7 +53,6 @@ export function useTouchHaptics() {
     }
 
     let lastImpactAt = 0;
-    const eventName = "PointerEvent" in window ? "pointerdown" : "touchstart";
     const handleTouch = (event: Event) => {
       if (typeof PointerEvent !== "undefined" && event instanceof PointerEvent) {
         if (event.pointerType === "mouse" || event.isPrimary === false) {
@@ -80,10 +79,15 @@ export function useTouchHaptics() {
       void triggerHaptic(style);
     };
 
-    document.addEventListener(eventName, handleTouch, true);
+    const eventNames = "PointerEvent" in window ? ["pointerdown", "touchstart"] : ["touchstart"];
+    eventNames.forEach((eventName) => {
+      document.addEventListener(eventName, handleTouch, true);
+    });
 
     return () => {
-      document.removeEventListener(eventName, handleTouch, true);
+      eventNames.forEach((eventName) => {
+        document.removeEventListener(eventName, handleTouch, true);
+      });
     };
   }, []);
 }
@@ -96,7 +100,7 @@ export async function triggerHaptic(style: HapticStyle = "selection") {
   try {
     await SmartBudgetHaptics.impact({ style });
   } catch {
-    // Ignore devices or browsers that do not expose a haptics bridge.
+    await webFallback.impact({ style });
   }
 }
 
