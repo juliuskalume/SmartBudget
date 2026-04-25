@@ -2068,7 +2068,7 @@ export function ProfileScreen({
                   {emailScannerConfig.autoSyncEnabled
                     ? emailScannerPassword.trim()
                       ? `Auto refresh every ${emailScannerConfig.pollingIntervalMinutes} min`
-                      : "Waiting for session password"
+                      : "Waiting for saved password"
                     : "Manual scan only"}
                 </strong>
               </div>
@@ -2199,7 +2199,7 @@ export function ProfileScreen({
             </div>
 
             <p className="helper-copy">
-              SmartBudget saves the mailbox settings on this device, but keeps the app password only for the current app session so automatic refresh can run while the app stays open.
+              SmartBudget saves the mailbox settings and app password on this device until you change or clear them. Automatic refresh uses the saved password while the app stays open.
             </p>
           </div>
         </Panel>

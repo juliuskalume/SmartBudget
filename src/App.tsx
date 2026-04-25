@@ -107,7 +107,8 @@ type EmailImportOptions = {
 
 const SUPPORT_EMAIL = "sentira.official@gmail.com";
 const APP_SHARE_MESSAGE = "Hey, I use SmartBudget to auto track and manage my finances. You can try it too at https://hamid-smart-budget.vercel.app";
-const EMAIL_SCANNER_SESSION_PASSWORD_KEY = "smartbudget-email-session-password-v1";
+const EMAIL_SCANNER_PASSWORD_KEY = "smartbudget-email-password-v1";
+const LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY = "smartbudget-email-session-password-v1";
 const AUTO_EMAIL_SCAN_LIMIT = 20;
 const MIN_AUTO_EMAIL_SYNC_GAP_MS = 60_000;
 
@@ -133,7 +134,7 @@ function App() {
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
   const [isImportingEmailInbox, setIsImportingEmailInbox] = useState(false);
-  const [emailScannerPassword, setEmailScannerPassword] = useState(() => loadEmailScannerSessionPassword());
+  const [emailScannerPassword, setEmailScannerPassword] = useState(() => loadSavedEmailScannerPassword());
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -151,7 +152,7 @@ function App() {
   }, [deviceState]);
 
   useEffect(() => {
-    saveEmailScannerSessionPassword(emailScannerPassword);
+    saveEmailScannerPassword(emailScannerPassword);
   }, [emailScannerPassword]);
 
   // Android back button handling
@@ -559,7 +560,6 @@ function App() {
     setCloudState(createDefaultCloudState());
     setAiAdvice(null);
     setPassword("");
-    setEmailScannerPassword("");
     setDeviceState((current) => ({
       ...current,
       activeScreen: "dashboard",
@@ -583,7 +583,6 @@ function App() {
     skipNextCloudSaveRef.current = true;
     setSession(buildDemoSession(email.trim() || "demo@smartbudget.app", selectedCountryCode));
     setCloudState(demoCloudState);
-    setEmailScannerPassword("");
     setDeviceState((current) => ({
       ...current,
       smsAccess: true,
@@ -993,6 +992,8 @@ function App() {
       }
 
       await supabase.auth.signOut();
+      clearSavedEmailScannerPassword();
+      setEmailScannerPassword("");
       clearSessionState();
       flashMessage("neutral", "Your SmartBudget account has been deleted.");
       return true;
@@ -1827,19 +1828,31 @@ function buildEmailPreview(text: string) {
   return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
 }
 
-function loadEmailScannerSessionPassword() {
+function loadSavedEmailScannerPassword() {
   if (typeof window === "undefined") {
     return "";
   }
 
   try {
-    return window.sessionStorage.getItem(EMAIL_SCANNER_SESSION_PASSWORD_KEY)?.trim() ?? "";
+    const savedPassword = window.localStorage.getItem(EMAIL_SCANNER_PASSWORD_KEY)?.trim();
+    if (savedPassword) {
+      return savedPassword;
+    }
+
+    const legacySessionPassword = window.sessionStorage.getItem(LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY)?.trim();
+    if (legacySessionPassword) {
+      window.localStorage.setItem(EMAIL_SCANNER_PASSWORD_KEY, legacySessionPassword);
+      window.sessionStorage.removeItem(LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY);
+      return legacySessionPassword;
+    }
+
+    return "";
   } catch {
     return "";
   }
 }
 
-function saveEmailScannerSessionPassword(value: string) {
+function saveEmailScannerPassword(value: string) {
   if (typeof window === "undefined") {
     return;
   }
@@ -1847,13 +1860,27 @@ function saveEmailScannerSessionPassword(value: string) {
   try {
     const trimmed = value.trim();
     if (trimmed) {
-      window.sessionStorage.setItem(EMAIL_SCANNER_SESSION_PASSWORD_KEY, trimmed);
+      window.localStorage.setItem(EMAIL_SCANNER_PASSWORD_KEY, trimmed);
+      window.sessionStorage.removeItem(LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY);
       return;
     }
 
-    window.sessionStorage.removeItem(EMAIL_SCANNER_SESSION_PASSWORD_KEY);
+    clearSavedEmailScannerPassword();
   } catch {
-    // Ignore session storage failures. Email scanning still works for the active page lifetime.
+    // Ignore storage failures. Email scanning still works for the active page lifetime.
+  }
+}
+
+function clearSavedEmailScannerPassword() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(EMAIL_SCANNER_PASSWORD_KEY);
+    window.sessionStorage.removeItem(LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
   }
 }
 

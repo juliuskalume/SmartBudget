@@ -39,7 +39,7 @@ npm run dev
 
 The local server provides the `/api/ai/*` routes used by the app.
 It also serves `/api/inflation/current`, which reads the latest monthly CPI index from the World Bank GEM source and falls back to the bundled country snapshot only when the live feed is unavailable.
-It also serves `/api/email/scan`, which connects to a mailbox over IMAP when you trigger an email inbox scan or session-based auto refresh from the app.
+It also serves `/api/email/scan`, which connects to a mailbox over IMAP when you trigger an email inbox scan or auto refresh from the app.
 
 ## Supabase
 
@@ -51,7 +51,7 @@ That creates the `user_app_state` table used to store:
 - Smart Save+ goal
 - target currency
 
-Supabase auth owns the user session. Browser local storage is only used for device-level UI state such as the active screen and Android SMS permission hint.
+Supabase auth owns the user session. Browser local storage is only used for device-level UI state such as the active screen, Android SMS permission hint, and any email inbox settings or app password the user chooses to save on that device.
 
 In the Supabase dashboard, set Auth URL Configuration so email verification returns to your deployed site:
 
@@ -86,7 +86,7 @@ npm run android:open
 
 The Android app includes native SMS inbox import. SMS content is read locally on the device after permission is granted, then parsed transactions are saved to the user's cloud account.
 
-Email inbox scans work in the web app and Android wrapper through standard IMAP. Enter the mailbox address, an app password, and optionally a custom IMAP host from the Profile settings screen. Gmail, Outlook, Yahoo, and iCloud can be auto-detected when the host field is left blank. If the user enables auto refresh, SmartBudget rescans on app open and every few minutes while the app remains open, using an app password kept only for that session.
+Email inbox scans work in the web app and Android wrapper through standard IMAP. Enter the mailbox address, an app password, and optionally a custom IMAP host from the Profile settings screen. Gmail, Outlook, Yahoo, and iCloud can be auto-detected when the host field is left blank. If the user enables auto refresh, SmartBudget rescans on app open and every few minutes while the app remains open, using the app password saved on that device until the user changes or clears it.
 
 The Android wrapper defaults to `https://hamid-smart-budget.vercel.app` and opens the hosted client URL instead of bundled `dist` assets. Set `APP_URL` only when you want to override that for staging or another deployment.
 
