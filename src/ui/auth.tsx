@@ -6,7 +6,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { Panel } from "./shared";
+import { Panel, PasswordField } from "./shared";
 import type { CountryOption } from "../lib/country-data";
 
 export function AuthScreen({
@@ -108,9 +108,7 @@ export function AuthScreen({
 
           <label className="field">
             <span>Password</span>
-            <input
-              className="input"
-              type="password"
+            <PasswordField
               value={password}
               onChange={(event) => onPasswordChange(event.target.value)}
               placeholder="Your secure password"

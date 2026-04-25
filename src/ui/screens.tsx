@@ -72,7 +72,7 @@ import type {
   WhatIfPeriod,
   WhatIfScenario,
 } from "../types";
-import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./shared";
+import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel, PasswordField } from "./shared";
 
 const chartTooltipStyle = {
   contentStyle: {
@@ -586,9 +586,7 @@ export function TransactionsScreen({
 
             <label className="field">
               <span>App password</span>
-              <input
-                className="input"
-                type="password"
+              <PasswordField
                 value={emailPassword}
                 onChange={(event) => setEmailPassword(event.target.value)}
                 placeholder="Email app password"
@@ -2153,32 +2151,26 @@ export function ProfileScreen({
             <div className="profile-grid">
               <label className="field">
                 <span>New password</span>
-                <div className="field-with-icon">
-                  <KeyRound size={16} />
-                  <input
-                    className="input"
-                    type="password"
-                    value={passwordInput}
-                    onChange={(event) => setPasswordInput(event.target.value)}
-                    placeholder="At least 8 characters"
-                    disabled={!canManageAuth || isUpdatingPassword}
-                  />
-                </div>
+                <PasswordField
+                  icon={KeyRound}
+                  variant="dark"
+                  value={passwordInput}
+                  onChange={(event) => setPasswordInput(event.target.value)}
+                  placeholder="At least 8 characters"
+                  disabled={!canManageAuth || isUpdatingPassword}
+                />
               </label>
 
               <label className="field">
                 <span>Confirm new password</span>
-                <div className="field-with-icon">
-                  <KeyRound size={16} />
-                  <input
-                    className="input"
-                    type="password"
-                    value={confirmPasswordInput}
-                    onChange={(event) => setConfirmPasswordInput(event.target.value)}
-                    placeholder="Repeat the new password"
-                    disabled={!canManageAuth || isUpdatingPassword}
-                  />
-                </div>
+                <PasswordField
+                  icon={KeyRound}
+                  variant="dark"
+                  value={confirmPasswordInput}
+                  onChange={(event) => setConfirmPasswordInput(event.target.value)}
+                  placeholder="Repeat the new password"
+                  disabled={!canManageAuth || isUpdatingPassword}
+                />
               </label>
             </div>
 

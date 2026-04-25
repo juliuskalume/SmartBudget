@@ -1,6 +1,8 @@
-import type { ReactNode } from "react";
+import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Eye,
+  EyeOff,
   LayoutDashboard,
   Menu,
   PiggyBank,
@@ -90,6 +92,39 @@ export function Badge({
   children: ReactNode;
 }) {
   return <span className={`badge badge--${tone}`}>{children}</span>;
+}
+
+export function PasswordField({
+  icon: Icon,
+  variant = "default",
+  className = "",
+  inputClassName = "input",
+  ...inputProps
+}: {
+  icon?: LucideIcon;
+  variant?: "default" | "dark";
+  className?: string;
+  inputClassName?: string;
+} & Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [isVisible, setIsVisible] = useState(false);
+
+  return (
+    <div className={`password-field password-field--${variant} ${className}`.trim()}>
+      {Icon ? <Icon size={16} className="password-field__icon" /> : null}
+      <input {...inputProps} className={inputClassName} type={isVisible ? "text" : "password"} />
+      <button
+        className="password-field__toggle"
+        type="button"
+        onClick={() => setIsVisible((current) => !current)}
+        disabled={Boolean(inputProps.disabled)}
+        aria-label={isVisible ? "Hide password" : "Show password"}
+        aria-pressed={isVisible}
+      >
+        {isVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+        <span>{isVisible ? "Hide" : "Show"}</span>
+      </button>
+    </div>
+  );
 }
 
 export function MetricCard({
