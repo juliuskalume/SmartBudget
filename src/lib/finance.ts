@@ -4,22 +4,22 @@ import { buildFallbackExchangeRates, normalizeCurrencyCode } from "./exchange-ra
 export const CATEGORY_ORDER: Category[] = [...CATEGORY_VALUES];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
-  Groceries: "#93ff00",
-  Dining: "#ff8a3d",
-  Transport: "#2db7ff",
-  Shopping: "#ff6b6b",
-  "Bills & Utilities": "#fffd02",
-  Housing: "#8b5cf6",
+  Groceries: "#84cc16",
+  Dining: "#f97316",
+  Transport: "#0ea5e9",
+  Shopping: "#ec4899",
+  "Bills & Utilities": "#facc15",
+  Housing: "#6366f1",
   Health: "#22c55e",
-  Education: "#d8dde8",
-  Entertainment: "#ff4fd8",
-  "Cash & ATM": "#f97316",
-  Transfers: "#38bdf8",
-  Salary: "#34d399",
-  Business: "#14b8a6",
-  "Savings & Investment": "#facc15",
-  Refunds: "#a78bfa",
-  Other: "#94a3b8",
+  Education: "#a78bfa",
+  Entertainment: "#d946ef",
+  "Cash & ATM": "#fb7185",
+  Transfers: "#14b8a6",
+  Salary: "#10b981",
+  Business: "#ef4444",
+  "Savings & Investment": "#eab308",
+  Refunds: "#06b6d4",
+  Other: "#64748b",
 };
 
 const GROCERIES_KEYWORDS = [

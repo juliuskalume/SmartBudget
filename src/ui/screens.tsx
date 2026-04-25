@@ -102,6 +102,65 @@ const chartAxisProps = {
   tick: { fill: "#d5cc8a", fontSize: 11 },
 };
 
+const PIE_LABEL_MIN_SHARE = 0.08;
+
+function formatPieCategoryLabel(category: string) {
+  if (category === "Bills & Utilities") {
+    return "Bills";
+  }
+
+  if (category === "Savings & Investment") {
+    return "Savings";
+  }
+
+  if (category === "Cash & ATM") {
+    return "Cash";
+  }
+
+  return category;
+}
+
+function renderCategoryPieLabel({
+  cx = 0,
+  cy = 0,
+  innerRadius = 0,
+  outerRadius = 0,
+  midAngle = 0,
+  percent = 0,
+  name = "",
+}: {
+  cx?: number;
+  cy?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  midAngle?: number;
+  percent?: number;
+  name?: string;
+}) {
+  if (!name || (percent < PIE_LABEL_MIN_SHARE && name !== "Other")) {
+    return null;
+  }
+
+  const radius = Number(innerRadius) + (Number(outerRadius) - Number(innerRadius)) * 0.58;
+  const angle = (-Number(midAngle) * Math.PI) / 180;
+  const x = Number(cx) + radius * Math.cos(angle);
+  const y = Number(cy) + radius * Math.sin(angle);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      fill="#fffef2"
+      fontSize="10"
+      fontWeight="700"
+      textAnchor={x > Number(cx) ? "start" : "end"}
+      dominantBaseline="central"
+    >
+      {formatPieCategoryLabel(name)}
+    </text>
+  );
+}
+
 const categoryIconMap = {
   Groceries: UtensilsCrossed,
   Dining: UtensilsCrossed,
@@ -325,6 +384,8 @@ export function DashboardScreen({
                       innerRadius={54}
                       outerRadius={84}
                       paddingAngle={3}
+                      label={renderCategoryPieLabel}
+                      labelLine={false}
                     >
                       {categoryBreakdown.map((entry) => (
                         <Cell key={entry.category} fill={entry.color} />
