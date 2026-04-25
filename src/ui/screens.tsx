@@ -2072,7 +2072,13 @@ export function ProfileScreen({
               </label>
 
               <label className="field">
-                <span>App password(<a href="https://myaccount.google.com/apppasswords">get it here</a>)</span>
+                <span>
+                  App password(
+                  <a href="https://myaccount.google.com/apppasswords" style={{ color: "#ef4444", textDecoration: "underline" }}>
+                    get it here
+                  </a>
+                  )
+                </span>
                 <input
                   className="input"
                   type="password"
