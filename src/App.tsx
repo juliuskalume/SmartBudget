@@ -88,6 +88,16 @@ type EmailInboxMessage = {
   text: string;
 };
 
+type EmailScanResponse = {
+  mailbox: string;
+  provider: string;
+  resolvedHost: string;
+  uidValidity: string;
+  highestUid: number;
+  incremental: boolean;
+  messages: EmailInboxMessage[];
+};
+
 type EmailScanInput = EmailScannerConfig & {
   appPassword: string;
 };
@@ -731,11 +741,41 @@ function App() {
   function updateEmailScannerConfig(value: Partial<EmailScannerConfig>) {
     setDeviceState((current) => ({
       ...current,
-      emailScanner: {
-        ...current.emailScanner,
-        ...value,
-      },
+      emailScanner: buildNextEmailScannerConfig(current.emailScanner, value),
     }));
+  }
+
+  function updateEmailScannerCursor(
+    identity: Pick<EmailScannerConfig, "emailAddress" | "host" | "port" | "mailbox">,
+    cursor: Pick<EmailScannerConfig, "lastSeenUid" | "uidValidity">,
+  ) {
+    const nextUidValidity = cursor.uidValidity.trim();
+    const nextLastSeenUid = Number.isFinite(cursor.lastSeenUid) && cursor.lastSeenUid > 0 ? Math.floor(cursor.lastSeenUid) : 0;
+
+    setDeviceState((current) => {
+      if (!isSameEmailScannerIdentity(current.emailScanner, identity)) {
+        return current;
+      }
+
+      const currentUidValidity = current.emailScanner.uidValidity.trim();
+      const mergedLastSeenUid =
+        nextUidValidity && currentUidValidity === nextUidValidity
+          ? Math.max(current.emailScanner.lastSeenUid, nextLastSeenUid)
+          : nextLastSeenUid;
+
+      if (current.emailScanner.lastSeenUid === mergedLastSeenUid && currentUidValidity === nextUidValidity) {
+        return current;
+      }
+
+      return {
+        ...current,
+        emailScanner: {
+          ...current.emailScanner,
+          lastSeenUid: mergedLastSeenUid,
+          uidValidity: nextUidValidity,
+        },
+      };
+    });
   }
 
   function buyProtectedCurrency(amount: number, currency: CurrencyCode, bankId: string) {
@@ -1309,6 +1349,9 @@ function App() {
     const mailbox = input.mailbox.trim() || createDefaultEmailScannerConfig().mailbox;
     const parsedPort = Number(input.port);
     const port = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : createDefaultEmailScannerConfig().port;
+    const afterUid = Number.isFinite(input.lastSeenUid) && input.lastSeenUid > 0 ? Math.floor(input.lastSeenUid) : 0;
+    const uidValidity = input.uidValidity.trim();
+    const scanIdentity = { emailAddress, host, port, mailbox };
     const {
       limit = 40,
       notifyOnImport = true,
@@ -1368,13 +1411,22 @@ function App() {
           port,
           mailbox,
           limit,
+          afterUid: afterUid || undefined,
+          uidValidity: uidValidity || undefined,
         }),
       });
-      const payload = await response.json().catch(() => null);
+      const payload = (await response.json().catch(() => null)) as (Partial<EmailScanResponse> & { error?: unknown }) | null;
 
       if (!response.ok) {
         throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to scan the email inbox.");
       }
+
+      updateEmailScannerCursor(scanIdentity, {
+        lastSeenUid:
+          Number.isFinite(Number(payload?.highestUid)) && Number(payload?.highestUid) > 0 ? Math.floor(Number(payload?.highestUid)) : 0,
+        uidValidity: typeof payload?.uidValidity === "string" ? payload.uidValidity : "",
+      });
+      const isIncrementalScan = Boolean(payload?.incremental);
 
       const messages = Array.isArray(payload?.messages)
         ? payload.messages.map((entry) => sanitizeEmailInboxMessage(entry)).filter((entry): entry is EmailInboxMessage => entry !== null)
@@ -1387,7 +1439,8 @@ function App() {
         successMessage,
         duplicateMessage,
         ignoredMessage,
-        emptyMailboxMessage,
+        emptyMailboxMessage:
+          emptyMailboxMessage ?? (isIncrementalScan ? "No new bank-like emails were found since the last sync." : undefined),
       });
 
       return {
@@ -1826,6 +1879,49 @@ function buildEmailMessageKey(message: Pick<EmailInboxMessage, "messageId" | "ui
 function buildEmailPreview(text: string) {
   const normalized = text.replace(/\s+/g, " ").trim();
   return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
+}
+
+function buildNextEmailScannerConfig(current: EmailScannerConfig, updates: Partial<EmailScannerConfig>) {
+  const nextConfig = {
+    ...current,
+    ...updates,
+  };
+
+  if (isSameEmailScannerIdentity(current, nextConfig)) {
+    return nextConfig;
+  }
+
+  return {
+    ...nextConfig,
+    lastSeenUid: 0,
+    uidValidity: "",
+  };
+}
+
+function isSameEmailScannerIdentity(
+  left: Pick<EmailScannerConfig, "emailAddress" | "host" | "port" | "mailbox">,
+  right: Pick<EmailScannerConfig, "emailAddress" | "host" | "port" | "mailbox">,
+) {
+  const normalizedLeft = normalizeEmailScannerIdentity(left);
+  const normalizedRight = normalizeEmailScannerIdentity(right);
+
+  return (
+    normalizedLeft.emailAddress === normalizedRight.emailAddress &&
+    normalizedLeft.host === normalizedRight.host &&
+    normalizedLeft.port === normalizedRight.port &&
+    normalizedLeft.mailbox === normalizedRight.mailbox
+  );
+}
+
+function normalizeEmailScannerIdentity(value: Pick<EmailScannerConfig, "emailAddress" | "host" | "port" | "mailbox">) {
+  const fallback = createDefaultEmailScannerConfig();
+
+  return {
+    emailAddress: value.emailAddress.trim().toLowerCase(),
+    host: value.host.trim(),
+    port: Number.isFinite(Number(value.port)) && Number(value.port) > 0 ? Number(value.port) : fallback.port,
+    mailbox: value.mailbox.trim() || fallback.mailbox,
+  };
 }
 
 function loadSavedEmailScannerPassword() {

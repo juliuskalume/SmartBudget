@@ -2061,7 +2061,7 @@ export function ProfileScreen({
               </div>
               <div className="sync-card__content">
                 <strong>Experimental email sync for bank alerts</strong>
-                <p>Use a mail app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to auto-detect common providers.</p>
+                <p>Use a mail app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to auto-detect common providers. After the first sync, SmartBudget checks only newer emails.</p>
               </div>
             </div>
 

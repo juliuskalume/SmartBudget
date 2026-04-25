@@ -120,6 +120,8 @@ async function startServer() {
         port: Number(req.body?.port),
         mailbox: typeof req.body?.mailbox === "string" ? req.body.mailbox : undefined,
         limit: Number(req.body?.limit),
+        afterUid: Number(req.body?.afterUid),
+        uidValidity: typeof req.body?.uidValidity === "string" ? req.body.uidValidity : undefined,
       });
       res.json(result);
     } catch (error) {

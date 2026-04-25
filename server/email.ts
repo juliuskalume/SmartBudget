@@ -8,6 +8,8 @@ export type EmailScanRequest = {
   port?: number;
   mailbox?: string;
   limit?: number;
+  afterUid?: number;
+  uidValidity?: string;
 };
 
 export type EmailInboxMessage = {
@@ -123,6 +125,18 @@ function resolveLimit(input: number | undefined) {
   }
 
   return Math.max(5, Math.min(100, Math.floor(input)));
+}
+
+function resolveAfterUid(input: number | undefined) {
+  if (!Number.isFinite(input) || !input) {
+    return 0;
+  }
+
+  return Math.max(0, Math.floor(input));
+}
+
+function resolveUidValidity(input: string | undefined) {
+  return typeof input === "string" ? input.trim() : "";
 }
 
 function resolveConnection(input: EmailScanRequest) {
@@ -297,12 +311,17 @@ export async function scanEmailInbox(input: EmailScanRequest): Promise<{
   mailbox: string;
   provider: string;
   resolvedHost: string;
+  uidValidity: string;
+  highestUid: number;
+  incremental: boolean;
   messages: EmailInboxMessage[];
 }> {
   const emailAddress = input.emailAddress.trim().toLowerCase();
   const appPassword = input.appPassword.trim();
   const mailbox = resolveMailbox(input.mailbox);
   const limit = resolveLimit(input.limit);
+  const afterUid = resolveAfterUid(input.afterUid);
+  const requestedUidValidity = resolveUidValidity(input.uidValidity);
 
   if (!emailAddress || !emailAddress.includes("@")) {
     throw new Error("Enter a valid email address for inbox scanning.");
@@ -330,20 +349,44 @@ export async function scanEmailInbox(input: EmailScanRequest): Promise<{
     await client.connect();
     lock = await client.getMailboxLock(mailbox);
 
-    const exists = client.mailbox ? client.mailbox.exists ?? 0 : 0;
+    const mailboxState = client.mailbox || null;
+    const exists = mailboxState?.exists ?? 0;
+    const mailboxUidValidity = mailboxState ? mailboxState.uidValidity.toString() : "";
+
     if (!exists) {
       return {
         mailbox,
         provider: connection.provider,
         resolvedHost: connection.host,
+        uidValidity: mailboxUidValidity,
+        highestUid: 0,
+        incremental: false,
         messages: [],
       };
     }
 
-    const start = Math.max(1, exists - limit + 1);
-    const messages: EmailInboxMessage[] = [];
+    const canUseIncrementalFetch = afterUid > 0 && mailboxUidValidity !== "" && requestedUidValidity === mailboxUidValidity;
+    const latestPredictedUid = Math.max(0, (mailboxState?.uidNext ?? 1) - 1);
 
-    for await (const message of client.fetch(`${start}:*`, { uid: true, envelope: true, source: true, internalDate: true })) {
+    if (canUseIncrementalFetch && latestPredictedUid <= afterUid) {
+      return {
+        mailbox,
+        provider: connection.provider,
+        resolvedHost: connection.host,
+        uidValidity: mailboxUidValidity,
+        highestUid: afterUid,
+        incremental: true,
+        messages: [],
+      };
+    }
+
+    const messages: EmailInboxMessage[] = [];
+    let highestUid = canUseIncrementalFetch ? afterUid : 0;
+    const range = canUseIncrementalFetch ? `${afterUid + 1}:*` : `${Math.max(1, exists - limit + 1)}:*`;
+    const fetchOptions = canUseIncrementalFetch ? { uid: true } : undefined;
+
+    for await (const message of client.fetch(range, { uid: true, envelope: true, source: true, internalDate: true }, fetchOptions)) {
+      highestUid = Math.max(highestUid, message.uid);
       const parsed = await simpleParser(toBuffer(message.source));
       const subject = compactText(parsed.subject ?? message.envelope?.subject ?? "");
       const from = buildSenderLabel(parsed.from?.text ?? "", message.envelope?.from?.map((entry) => entry.address ?? entry.name ?? "").join(", ") ?? "");
@@ -374,6 +417,9 @@ export async function scanEmailInbox(input: EmailScanRequest): Promise<{
       mailbox,
       provider: connection.provider,
       resolvedHost: connection.host,
+      uidValidity: mailboxUidValidity,
+      highestUid,
+      incremental: canUseIncrementalFetch,
       messages,
     };
   } catch (error) {

@@ -32,6 +32,8 @@ export function createDefaultEmailScannerConfig(): EmailScannerConfig {
     host: "",
     port: 993,
     mailbox: "INBOX",
+    lastSeenUid: 0,
+    uidValidity: "",
     autoSyncEnabled: false,
     pollingIntervalMinutes: 5,
   };
@@ -130,6 +132,8 @@ function normalizeEmailScannerConfig(value: unknown): EmailScannerConfig {
     host: typeof parsed.host === "string" ? parsed.host.trim() : fallback.host,
     port: Number.isFinite(Number(parsed.port)) && Number(parsed.port) > 0 ? Number(parsed.port) : fallback.port,
     mailbox: typeof parsed.mailbox === "string" && parsed.mailbox.trim() ? parsed.mailbox.trim() : fallback.mailbox,
+    lastSeenUid: Number.isFinite(Number(parsed.lastSeenUid)) && Number(parsed.lastSeenUid) > 0 ? Math.floor(Number(parsed.lastSeenUid)) : 0,
+    uidValidity: typeof parsed.uidValidity === "string" ? parsed.uidValidity.trim() : fallback.uidValidity,
     autoSyncEnabled: Boolean(parsed.autoSyncEnabled),
     pollingIntervalMinutes: normalizeEmailPollingInterval(parsed.pollingIntervalMinutes),
   };

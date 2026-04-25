@@ -49,6 +49,8 @@ export interface EmailScannerConfig {
   host: string;
   port: number;
   mailbox: string;
+  lastSeenUid: number;
+  uidValidity: string;
   autoSyncEnabled: boolean;
   pollingIntervalMinutes: number;
 }
