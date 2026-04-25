@@ -49,6 +49,8 @@ export interface EmailScannerConfig {
   host: string;
   port: number;
   mailbox: string;
+  autoSyncEnabled: boolean;
+  pollingIntervalMinutes: number;
 }
 
 export interface AdviceCard {

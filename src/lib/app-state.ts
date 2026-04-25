@@ -32,6 +32,8 @@ export function createDefaultEmailScannerConfig(): EmailScannerConfig {
     host: "",
     port: 993,
     mailbox: "INBOX",
+    autoSyncEnabled: false,
+    pollingIntervalMinutes: 5,
   };
 }
 
@@ -128,7 +130,18 @@ function normalizeEmailScannerConfig(value: unknown): EmailScannerConfig {
     host: typeof parsed.host === "string" ? parsed.host.trim() : fallback.host,
     port: Number.isFinite(Number(parsed.port)) && Number(parsed.port) > 0 ? Number(parsed.port) : fallback.port,
     mailbox: typeof parsed.mailbox === "string" && parsed.mailbox.trim() ? parsed.mailbox.trim() : fallback.mailbox,
+    autoSyncEnabled: Boolean(parsed.autoSyncEnabled),
+    pollingIntervalMinutes: normalizeEmailPollingInterval(parsed.pollingIntervalMinutes),
   };
+}
+
+function normalizeEmailPollingInterval(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return createDefaultEmailScannerConfig().pollingIntervalMinutes;
+  }
+
+  return Math.max(2, Math.min(30, Math.round(parsed)));
 }
 
 export function isScreenKey(value: unknown): value is ScreenKey {

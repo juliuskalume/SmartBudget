@@ -1849,9 +1849,11 @@ export function ProfileScreen({
   isDeletingAccount,
   isImportingEmailInbox,
   emailScannerConfig,
+  emailScannerPassword,
   onSaveProfileDetails,
   onImportEmailInbox,
   onUpdateEmailScannerConfig,
+  onEmailScannerPasswordChange,
   onUpdatePassword,
   onOpenSupportComposer,
   onShareApp,
@@ -1864,9 +1866,11 @@ export function ProfileScreen({
   isDeletingAccount: boolean;
   isImportingEmailInbox: boolean;
   emailScannerConfig: EmailScannerConfig;
+  emailScannerPassword: string;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
   onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
+  onEmailScannerPasswordChange: (value: string) => void;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
@@ -1877,7 +1881,6 @@ export function ProfileScreen({
   const [emailInput, setEmailInput] = useState(session.email);
   const [avatarUrlInput, setAvatarUrlInput] = useState(session.avatarUrl ?? "");
   const [countryCodeInput, setCountryCodeInput] = useState(session.countryCode);
-  const [emailPassword, setEmailPassword] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
   const [confirmAction, setConfirmAction] = useState<"signout" | "delete" | null>(null);
@@ -2046,15 +2049,32 @@ export function ProfileScreen({
           </div>
         </Panel>
 
-        <Panel title="Email inbox scan" subtitle="Automatically import transactions from bank alert emails">
+        <Panel title="Email inbox scan" subtitle="Scan bank alert emails on demand or keep refreshing them while this app stays open.">
           <div className="stack">
             <div className="sync-card sync-card--full">
               <div className="sync-card__icon">
                 <Mail size={18} />
               </div>
               <div className="sync-card__content">
-                <strong>On-demand email import for bank alerts</strong>
+                <strong>Session-based email sync for bank alerts</strong>
                 <p>Use a mail app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to auto-detect common providers.</p>
+              </div>
+            </div>
+
+            <div className="composer-meta">
+              <div className="composer-meta__field">
+                <span>Status</span>
+                <strong>
+                  {emailScannerConfig.autoSyncEnabled
+                    ? emailScannerPassword.trim()
+                      ? `Auto refresh every ${emailScannerConfig.pollingIntervalMinutes} min`
+                      : "Waiting for session password"
+                    : "Manual scan only"}
+                </strong>
+              </div>
+              <div className="composer-meta__field">
+                <span>When it runs</span>
+                <strong>On app open and while the app stays open</strong>
               </div>
             </div>
 
@@ -2078,8 +2098,8 @@ export function ProfileScreen({
                 <input
                   className="input"
                   type="password"
-                  value={emailPassword}
-                  onChange={(event) => setEmailPassword(event.target.value)}
+                  value={emailScannerPassword}
+                  onChange={(event) => onEmailScannerPasswordChange(event.target.value)}
                   placeholder="Email app password"
                   autoComplete="current-password"
                 />
@@ -2123,6 +2143,42 @@ export function ProfileScreen({
                   placeholder="INBOX"
                 />
               </label>
+
+              <label className="field">
+                <span>Polling interval</span>
+                <select
+                  className="input"
+                  value={String(emailScannerConfig.pollingIntervalMinutes)}
+                  onChange={(event) =>
+                    onUpdateEmailScannerConfig({
+                      pollingIntervalMinutes: Number(event.target.value),
+                    })
+                  }
+                  disabled={!emailScannerConfig.autoSyncEnabled}
+                >
+                  <option value="2">Every 2 minutes</option>
+                  <option value="5">Every 5 minutes</option>
+                  <option value="10">Every 10 minutes</option>
+                  <option value="15">Every 15 minutes</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="segment-switch">
+              <button
+                className={`segment-switch__button ${!emailScannerConfig.autoSyncEnabled ? "segment-switch__button--active" : ""}`}
+                type="button"
+                onClick={() => onUpdateEmailScannerConfig({ autoSyncEnabled: false })}
+              >
+                Manual only
+              </button>
+              <button
+                className={`segment-switch__button ${emailScannerConfig.autoSyncEnabled ? "segment-switch__button--active" : ""}`}
+                type="button"
+                onClick={() => onUpdateEmailScannerConfig({ autoSyncEnabled: true })}
+              >
+                Auto refresh
+              </button>
             </div>
 
             <div className="button-row button-row--tight">
@@ -2132,11 +2188,7 @@ export function ProfileScreen({
                 onClick={() => {
                   void onImportEmailInbox({
                     ...emailScannerConfig,
-                    appPassword: emailPassword,
-                  }).then((scanned) => {
-                    if (scanned) {
-                      setEmailPassword("");
-                    }
+                    appPassword: emailScannerPassword,
                   });
                 }}
                 disabled={isImportingEmailInbox}
@@ -2147,7 +2199,7 @@ export function ProfileScreen({
             </div>
 
             <p className="helper-copy">
-              SmartBudget uses these settings only for on-demand inbox scans. The app password is not stored after the request finishes.
+              SmartBudget saves the mailbox settings on this device, but keeps the app password only for the current app session so automatic refresh can run while the app stays open.
             </p>
           </div>
         </Panel>

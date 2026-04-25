@@ -48,6 +48,7 @@ export function AppShell({
   isUpdatingPassword,
   isDeletingAccount,
   emailScannerConfig,
+  emailScannerPassword,
   adviceCards,
   insights,
   onSelectScreen,
@@ -61,6 +62,7 @@ export function AppShell({
   onUpdateGoal,
   onUpdateTargetCurrency,
   onUpdateEmailScannerConfig,
+  onEmailScannerPasswordChange,
   onSaveProfileDetails,
   onUpdatePassword,
   onOpenSupportComposer,
@@ -92,6 +94,7 @@ export function AppShell({
   isUpdatingPassword: boolean;
   isDeletingAccount: boolean;
   emailScannerConfig: EmailScannerConfig;
+  emailScannerPassword: string;
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
@@ -105,6 +108,7 @@ export function AppShell({
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
+  onEmailScannerPasswordChange: (value: string) => void;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
@@ -146,6 +150,7 @@ export function AppShell({
     isUpdatingPassword,
     isDeletingAccount,
     emailScannerConfig,
+    emailScannerPassword,
     adviceCards,
     insights,
     onSelectScreen,
@@ -158,6 +163,7 @@ export function AppShell({
     onImportEmailInbox,
     onRefreshAdvice,
     onUpdateEmailScannerConfig,
+    onEmailScannerPasswordChange,
     onSaveProfileDetails,
     onUpdatePassword,
     onOpenSupportComposer,
@@ -265,6 +271,7 @@ function renderScreen({
   isUpdatingPassword,
   isDeletingAccount,
   emailScannerConfig,
+  emailScannerPassword,
   adviceCards,
   insights,
   onSelectScreen,
@@ -277,6 +284,7 @@ function renderScreen({
   onImportEmailInbox,
   onRefreshAdvice,
   onUpdateEmailScannerConfig,
+  onEmailScannerPasswordChange,
   onSaveProfileDetails,
   onUpdatePassword,
   onOpenSupportComposer,
@@ -313,6 +321,7 @@ function renderScreen({
   isUpdatingPassword: boolean;
   isDeletingAccount: boolean;
   emailScannerConfig: EmailScannerConfig;
+  emailScannerPassword: string;
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
@@ -325,6 +334,7 @@ function renderScreen({
   onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
   onRefreshAdvice: () => void;
   onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
+  onEmailScannerPasswordChange: (value: string) => void;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
@@ -424,9 +434,11 @@ function renderScreen({
           isDeletingAccount={isDeletingAccount}
           isImportingEmailInbox={isImportingEmailInbox}
           emailScannerConfig={emailScannerConfig}
+          emailScannerPassword={emailScannerPassword}
           onSaveProfileDetails={onSaveProfileDetails}
           onImportEmailInbox={onImportEmailInbox}
           onUpdateEmailScannerConfig={onUpdateEmailScannerConfig}
+          onEmailScannerPasswordChange={onEmailScannerPasswordChange}
           onUpdatePassword={onUpdatePassword}
           onOpenSupportComposer={onOpenSupportComposer}
           onShareApp={onShareApp}

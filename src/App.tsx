@@ -92,8 +92,24 @@ type EmailScanInput = EmailScannerConfig & {
   appPassword: string;
 };
 
+type EmailImportOptions = {
+  limit?: number;
+  notifyOnImport?: boolean;
+  notifyWhenIgnored?: boolean;
+  notifyIfDuplicate?: boolean;
+  notifyOnError?: boolean;
+  successMessage?: string;
+  duplicateMessage?: string;
+  ignoredMessage?: string;
+  emptyMailboxMessage?: string;
+  persistConfig?: boolean;
+};
+
 const SUPPORT_EMAIL = "sentira.official@gmail.com";
 const APP_SHARE_MESSAGE = "Hey, I use SmartBudget to auto track and manage my finances. You can try it too at https://hamid-smart-budget.vercel.app";
+const EMAIL_SCANNER_SESSION_PASSWORD_KEY = "smartbudget-email-session-password-v1";
+const AUTO_EMAIL_SCAN_LIMIT = 20;
+const MIN_AUTO_EMAIL_SYNC_GAP_MS = 60_000;
 
 function App() {
   useTouchHaptics();
@@ -117,6 +133,7 @@ function App() {
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
   const [isImportingEmailInbox, setIsImportingEmailInbox] = useState(false);
+  const [emailScannerPassword, setEmailScannerPassword] = useState(() => loadEmailScannerSessionPassword());
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -125,10 +142,17 @@ function App() {
   const appliedCloudUserIdRef = useRef<string | null>(null);
   const isHydratingCloudRef = useRef(false);
   const skipNextCloudSaveRef = useRef(false);
+  const emailAutoSyncInFlightRef = useRef(false);
+  const emailAutoSyncLastRunAtRef = useRef(0);
+  const emailAutoSyncLastErrorRef = useRef<string | null>(null);
 
   useEffect(() => {
     saveDeviceState(deviceState);
   }, [deviceState]);
+
+  useEffect(() => {
+    saveEmailScannerSessionPassword(emailScannerPassword);
+  }, [emailScannerPassword]);
 
   // Android back button handling
   useEffect(() => {
@@ -344,6 +368,117 @@ function App() {
     });
   }, [session?.email]);
 
+  useEffect(() => {
+    if (!session || !deviceState.emailScanner.autoSyncEnabled) {
+      return;
+    }
+
+    const appPassword = emailScannerPassword.trim();
+    if (!appPassword) {
+      return;
+    }
+
+    const emailAddress = deviceState.emailScanner.emailAddress.trim();
+    if (!emailAddress || !emailAddress.includes("@")) {
+      return;
+    }
+
+    let cancelled = false;
+    const pollingIntervalMs = Math.max(deviceState.emailScanner.pollingIntervalMinutes, 2) * 60_000;
+
+    const syncEmailInboxInBackground = async (trigger: "open" | "interval") => {
+      if (cancelled || emailAutoSyncInFlightRef.current) {
+        return;
+      }
+
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - emailAutoSyncLastRunAtRef.current < MIN_AUTO_EMAIL_SYNC_GAP_MS) {
+        return;
+      }
+
+      emailAutoSyncInFlightRef.current = true;
+
+      try {
+        const result = await runEmailInboxImport(
+          {
+            ...deviceState.emailScanner,
+            appPassword,
+          },
+          {
+            limit: AUTO_EMAIL_SCAN_LIMIT,
+            notifyOnImport: false,
+            notifyWhenIgnored: false,
+            notifyIfDuplicate: false,
+            notifyOnError: false,
+            persistConfig: false,
+          },
+        );
+
+        if (cancelled) {
+          return;
+        }
+
+        if (result.ok) {
+          emailAutoSyncLastErrorRef.current = null;
+
+          if (result.outcome?.addedCount) {
+            flashMessage(
+              "success",
+              `Auto email sync added ${result.outcome.addedCount} transaction${result.outcome.addedCount === 1 ? "" : "s"}.`,
+            );
+          }
+
+          return;
+        }
+
+        if (!result.errorMessage) {
+          return;
+        }
+
+        if (result.errorMessage !== emailAutoSyncLastErrorRef.current) {
+          emailAutoSyncLastErrorRef.current = result.errorMessage;
+
+          if (/inbox login failed|mailbox could not be opened|check the email inbox settings/i.test(result.errorMessage)) {
+            setDeviceState((current) => ({
+              ...current,
+              emailScanner: {
+                ...current.emailScanner,
+                autoSyncEnabled: false,
+              },
+            }));
+            flashMessage("warning", `${result.errorMessage} Auto email refresh was paused.`);
+          }
+        }
+      } finally {
+        emailAutoSyncLastRunAtRef.current = Date.now();
+        emailAutoSyncInFlightRef.current = false;
+      }
+    };
+
+    const handleForeground = () => {
+      void syncEmailInboxInBackground("open");
+    };
+
+    const interval = window.setInterval(() => {
+      void syncEmailInboxInBackground("interval");
+    }, pollingIntervalMs);
+
+    window.addEventListener("focus", handleForeground);
+    document.addEventListener("visibilitychange", handleForeground);
+    void syncEmailInboxInBackground("open");
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleForeground);
+      document.removeEventListener("visibilitychange", handleForeground);
+    };
+  }, [deviceState.emailScanner, emailScannerPassword, session]);
+
   const displayCurrency = session?.localCurrency ?? getCountryCurrency(selectedCountryCode);
 
   useEffect(() => {
@@ -424,6 +559,7 @@ function App() {
     setCloudState(createDefaultCloudState());
     setAiAdvice(null);
     setPassword("");
+    setEmailScannerPassword("");
     setDeviceState((current) => ({
       ...current,
       activeScreen: "dashboard",
@@ -447,6 +583,7 @@ function App() {
     skipNextCloudSaveRef.current = true;
     setSession(buildDemoSession(email.trim() || "demo@smartbudget.app", selectedCountryCode));
     setCloudState(demoCloudState);
+    setEmailScannerPassword("");
     setDeviceState((current) => ({
       ...current,
       smsAccess: true,
@@ -1070,9 +1207,33 @@ function App() {
     };
   }
 
-  async function ingestEmailInboxMessages(messages: EmailInboxMessage[]) {
+  async function ingestEmailInboxMessages(
+    messages: EmailInboxMessage[],
+    options: {
+      notifyOnImport?: boolean;
+      notifyWhenIgnored?: boolean;
+      notifyIfDuplicate?: boolean;
+      successMessage?: string;
+      duplicateMessage?: string;
+      ignoredMessage?: string;
+      emptyMailboxMessage?: string;
+    } = {},
+  ) {
+    const {
+      notifyOnImport = true,
+      notifyWhenIgnored = true,
+      notifyIfDuplicate = true,
+      successMessage,
+      duplicateMessage,
+      ignoredMessage,
+      emptyMailboxMessage,
+    } = options;
+
     if (messages.length === 0) {
-      flashMessage("warning", "No bank-like emails were found in the selected mailbox.");
+      if (notifyWhenIgnored) {
+        flashMessage("warning", emptyMailboxMessage ?? "No bank-like emails were found in the selected mailbox.");
+      }
+
       return {
         addedCount: 0,
         ignoredCount: 0,
@@ -1124,11 +1285,13 @@ function App() {
 
     if (addedCount > 0) {
       setAiAdvice(null);
-      flashMessage("success", `Added ${addedCount} transaction${addedCount === 1 ? "" : "s"} from bank emails.`);
-    } else if (duplicateCount > 0) {
-      flashMessage("neutral", "These email alerts were already synced.");
-    } else if (ignoredCount > 0) {
-      flashMessage("warning", "SmartBudget scanned those emails, but none of them looked like bank transactions.");
+      if (notifyOnImport) {
+        flashMessage("success", successMessage ?? `Added ${addedCount} transaction${addedCount === 1 ? "" : "s"} from bank emails.`);
+      }
+    } else if (duplicateCount > 0 && notifyIfDuplicate) {
+      flashMessage("neutral", duplicateMessage ?? "These email alerts were already synced.");
+    } else if (ignoredCount > 0 && notifyWhenIgnored) {
+      flashMessage("warning", ignoredMessage ?? "SmartBudget scanned those emails, but none of them looked like bank transactions.");
     }
 
     return {
@@ -1138,30 +1301,56 @@ function App() {
     };
   }
 
-  async function importEmailInbox(input: EmailScanInput) {
+  async function runEmailInboxImport(input: EmailScanInput, options: EmailImportOptions = {}) {
     const emailAddress = input.emailAddress.trim().toLowerCase();
     const appPassword = input.appPassword.trim();
     const host = input.host.trim();
     const mailbox = input.mailbox.trim() || createDefaultEmailScannerConfig().mailbox;
     const parsedPort = Number(input.port);
     const port = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : createDefaultEmailScannerConfig().port;
+    const {
+      limit = 40,
+      notifyOnImport = true,
+      notifyWhenIgnored = true,
+      notifyIfDuplicate = true,
+      notifyOnError = true,
+      successMessage,
+      duplicateMessage,
+      ignoredMessage,
+      emptyMailboxMessage,
+      persistConfig = true,
+    } = options;
 
     if (!emailAddress || !emailAddress.includes("@")) {
-      flashMessage("warning", "Enter the email address you want SmartBudget to scan.");
-      return false;
+      if (notifyOnError) {
+        flashMessage("warning", "Enter the email address you want SmartBudget to scan.");
+      }
+
+      return {
+        ok: false as const,
+        errorMessage: "Enter the email address you want SmartBudget to scan.",
+      };
     }
 
     if (!appPassword) {
-      flashMessage("warning", "Enter an app password before scanning your email inbox.");
-      return false;
+      if (notifyOnError) {
+        flashMessage("warning", "Enter an app password before scanning your email inbox.");
+      }
+
+      return {
+        ok: false as const,
+        errorMessage: "Enter an app password before scanning your email inbox.",
+      };
     }
 
-    updateEmailScannerConfig({
-      emailAddress,
-      host,
-      mailbox,
-      port,
-    });
+    if (persistConfig) {
+      updateEmailScannerConfig({
+        emailAddress,
+        host,
+        mailbox,
+        port,
+      });
+    }
 
     setIsImportingEmailInbox(true);
 
@@ -1177,7 +1366,7 @@ function App() {
           host: host || undefined,
           port,
           mailbox,
-          limit: 40,
+          limit,
         }),
       });
       const payload = await response.json().catch(() => null);
@@ -1190,14 +1379,38 @@ function App() {
         ? payload.messages.map((entry) => sanitizeEmailInboxMessage(entry)).filter((entry): entry is EmailInboxMessage => entry !== null)
         : [];
 
-      await ingestEmailInboxMessages(messages);
-      return true;
+      const outcome = await ingestEmailInboxMessages(messages, {
+        notifyOnImport,
+        notifyWhenIgnored,
+        notifyIfDuplicate,
+        successMessage,
+        duplicateMessage,
+        ignoredMessage,
+        emptyMailboxMessage,
+      });
+
+      return {
+        ok: true as const,
+        outcome,
+      };
     } catch (error) {
-      flashMessage("error", error instanceof Error ? error.message : "Unable to scan the email inbox.");
-      return false;
+      const errorMessage = error instanceof Error ? error.message : "Unable to scan the email inbox.";
+      if (notifyOnError) {
+        flashMessage("error", errorMessage);
+      }
+
+      return {
+        ok: false as const,
+        errorMessage,
+      };
     } finally {
       setIsImportingEmailInbox(false);
     }
+  }
+
+  async function importEmailInbox(input: EmailScanInput) {
+    const result = await runEmailInboxImport(input);
+    return result.ok;
   }
 
   function addManualTransaction(entry: ManualTransactionDraft) {
@@ -1418,6 +1631,7 @@ function App() {
         isUpdatingPassword={isUpdatingPassword}
         isDeletingAccount={isDeletingAccount}
         emailScannerConfig={deviceState.emailScanner}
+        emailScannerPassword={emailScannerPassword}
         adviceCards={adviceCards}
         insights={insights}
         onSelectScreen={updateScreen}
@@ -1431,6 +1645,7 @@ function App() {
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}
         onUpdateEmailScannerConfig={updateEmailScannerConfig}
+        onEmailScannerPasswordChange={setEmailScannerPassword}
         onSaveProfileDetails={saveProfileDetails}
         onUpdatePassword={updatePassword}
         onOpenSupportComposer={openSupportComposer}
@@ -1610,6 +1825,36 @@ function buildEmailMessageKey(message: Pick<EmailInboxMessage, "messageId" | "ui
 function buildEmailPreview(text: string) {
   const normalized = text.replace(/\s+/g, " ").trim();
   return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
+}
+
+function loadEmailScannerSessionPassword() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  try {
+    return window.sessionStorage.getItem(EMAIL_SCANNER_SESSION_PASSWORD_KEY)?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function saveEmailScannerSessionPassword(value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const trimmed = value.trim();
+    if (trimmed) {
+      window.sessionStorage.setItem(EMAIL_SCANNER_SESSION_PASSWORD_KEY, trimmed);
+      return;
+    }
+
+    window.sessionStorage.removeItem(EMAIL_SCANNER_SESSION_PASSWORD_KEY);
+  } catch {
+    // Ignore session storage failures. Email scanning still works for the active page lifetime.
+  }
 }
 
 function getTransactionDedupKeys(transaction: Pick<Transaction, "sourceMessageId" | "rawSms" | "rawEmail">) {
