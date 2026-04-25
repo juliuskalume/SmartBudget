@@ -5,6 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { categorizeSmsText, generateAdviceCards } from "./server/ai.js";
 import { deleteAuthenticatedAccount } from "./server/account.js";
+import { scanEmailInbox } from "./server/email.js";
 import { buildBalancePurchasingPowerShift } from "./server/inflation.js";
 import { buildInvestmentRecommendations, buildMarketInsights, buildWhatIfScenario } from "./server/markets.js";
 
@@ -24,9 +25,9 @@ async function startServer() {
 
   // Groq AI Categorization
   app.post("/api/ai/categorize", async (req, res) => {
-    const { smsText } = req.body;
+    const messageText = typeof req.body?.messageText === "string" ? req.body.messageText : req.body?.smsText;
     try {
-      const result = await categorizeSmsText(typeof smsText === "string" ? smsText : "");
+      const result = await categorizeSmsText(typeof messageText === "string" ? messageText : "");
       res.json(result);
     } catch (error) {
       console.error("Groq Error:", error);
@@ -107,6 +108,23 @@ async function startServer() {
     } catch (error) {
       console.error("Account deletion error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Unable to delete account" });
+    }
+  });
+
+  app.post("/api/email/scan", async (req, res) => {
+    try {
+      const result = await scanEmailInbox({
+        emailAddress: typeof req.body?.emailAddress === "string" ? req.body.emailAddress : "",
+        appPassword: typeof req.body?.appPassword === "string" ? req.body.appPassword : "",
+        host: typeof req.body?.host === "string" ? req.body.host : undefined,
+        port: Number(req.body?.port),
+        mailbox: typeof req.body?.mailbox === "string" ? req.body.mailbox : undefined,
+        limit: Number(req.body?.limit),
+      });
+      res.json(result);
+    } catch (error) {
+      console.error("Email scan error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Unable to scan the email inbox" });
     }
   });
 

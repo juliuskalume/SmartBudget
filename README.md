@@ -1,6 +1,6 @@
 # SmartBudget
 
-SmartBudget is a cloud-backed personal finance app for students. It combines SMS-based transaction import, AI categorization, spending analysis, and Smart Save+ value protection.
+SmartBudget is a cloud-backed personal finance app for students. It combines SMS and email-based transaction import, AI categorization, spending analysis, and Smart Save+ value protection.
 
 ## Stack
 
@@ -10,6 +10,7 @@ SmartBudget is a cloud-backed personal finance app for students. It combines SMS
 - Yahoo-powered live market screening for what-if analysis and investment suggestions
 - World Bank GEM monthly CPI feed for live purchasing-power impact
 - Capacitor Android wrapper for native SMS import
+- IMAP inbox scanning for email transaction alerts and receipts
 
 SmartBudget uses a cached Yahoo market screen across 100 curated instruments by default, with Twelve Data kept as a secondary backup.
 
@@ -38,6 +39,7 @@ npm run dev
 
 The local server provides the `/api/ai/*` routes used by the app.
 It also serves `/api/inflation/current`, which reads the latest monthly CPI index from the World Bank GEM source and falls back to the bundled country snapshot only when the live feed is unavailable.
+It also serves `/api/email/scan`, which connects to a mailbox over IMAP when you trigger an email inbox scan from the app.
 
 ## Supabase
 
@@ -83,6 +85,8 @@ npm run android:open
 ```
 
 The Android app includes native SMS inbox import. SMS content is read locally on the device after permission is granted, then parsed transactions are saved to the user's cloud account.
+
+Email inbox scans work in the web app and Android wrapper through standard IMAP. Enter the mailbox address, an app password, and optionally a custom IMAP host from the Transactions screen. Gmail, Outlook, Yahoo, and iCloud can be auto-detected when the host field is left blank.
 
 The Android wrapper defaults to `https://hamid-smart-budget.vercel.app` and opens the hosted client URL instead of bundled `dist` assets. Set `APP_URL` only when you want to override that for staging or another deployment.
 

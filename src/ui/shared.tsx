@@ -26,12 +26,12 @@ export const SCREEN_COPY: Record<ScreenKey, { eyebrow: string; title: string; su
   dashboard: {
     eyebrow: "Overview",
     title: "Financial cockpit",
-    subtitle: "SMS imports, savings health, and AI categorization in one command center.",
+    subtitle: "SMS, email imports, savings health, and AI categorization in one command center.",
   },
   transactions: {
     eyebrow: "Ledger",
     title: "Auto-tagged transactions",
-    subtitle: "Review imports, filter noise, and keep the dataset clean.",
+    subtitle: "Review SMS, email, and manual entries while keeping the dataset clean.",
   },
   analysis: {
     eyebrow: "Insights",

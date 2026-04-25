@@ -44,20 +44,20 @@ export function AuthScreen({
 
   return (
     <div className="auth-layout">
-      <Panel className="hero-panel auth-hero">
+      <Panel title="SmartBudget" className="hero-panel auth-hero">
         <div className="hero-badge">
           <img className="hero-badge__logo" src="/smartbudgetlogo.png" alt="SmartBudget logo" />
           SmartBudget
         </div>
         <h1>Manage, budget, save.</h1>
         <p>
-          Track your finances from bank SMS, auto-tag expenses with AI, sync everything to your account, and protect spare cash with Smart Save+.
+          Track your finances from bank SMS and email alerts, auto-tag expenses with AI, sync everything to your account, and protect spare cash with Smart Save+.
         </p>
 
         <div className="hero-stats">
           <div className="hero-stat">
-            <strong>SMS import</strong>
-            <span>Automatic transaction capture</span>
+            <strong>Smart imports</strong>
+            <span>SMS auto sync and email scans</span>
           </div>
           <div className="hero-stat">
             <strong>AI insights</strong>
@@ -157,7 +157,7 @@ export function AuthScreen({
         <div className="auth-note">
           <ShieldCheck size={16} />
           {cloudReady
-            ? "Your account and transactions sync to Supabase after login. Android SMS import stays local until the parsed transaction is saved."
+            ? "Your account and transactions sync to Supabase after login. Android SMS import stays local until the parsed transaction is saved, and email inbox scans run on demand."
             : "Configure Supabase to enable real login and cloud sync. Demo mode still works for previews."}
         </div>
 

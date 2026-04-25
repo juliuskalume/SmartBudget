@@ -65,7 +65,7 @@ export async function categorizeSmsText(smsText: string) {
         {
           role: "system",
           content:
-            "You are a financial assistant. Decide if an SMS is a real financial transaction alert. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (Supermarket, Transport, Entertainment, Bills, Education, Other), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). If it is not a transaction alert, return isTransaction=false. Return ONLY JSON.",
+            "You are a financial assistant. Decide if a bank-related SMS or email is a real financial transaction alert or receipt. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (Supermarket, Transport, Entertainment, Bills, Education, Other), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). If it is not a transaction alert or receipt, return isTransaction=false. Return ONLY JSON.",
         },
         {
           role: "user",

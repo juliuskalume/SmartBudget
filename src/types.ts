@@ -10,6 +10,7 @@ export type Category =
   | "Other";
 
 export type TransactionKind = "income" | "expense";
+export type TransactionSource = "sms" | "email" | "manual";
 
 export type ScreenKey =
   | "dashboard"
@@ -27,8 +28,11 @@ export interface Transaction {
   currency: CurrencyCode;
   category: Category;
   kind: TransactionKind;
-  source: "sms" | "manual";
+  source: TransactionSource;
   rawSms?: string;
+  rawEmail?: string;
+  emailSubject?: string;
+  sourceMessageId?: string;
 }
 
 export interface ManualTransactionDraft {
@@ -38,6 +42,13 @@ export interface ManualTransactionDraft {
   category: Category;
   kind: TransactionKind;
   date: string;
+}
+
+export interface EmailScannerConfig {
+  emailAddress: string;
+  host: string;
+  port: number;
+  mailbox: string;
 }
 
 export interface AdviceCard {
@@ -130,6 +141,16 @@ export interface FinancialSummary {
   cashFlow: number;
   netWorth: number;
   healthScore: number;
+}
+
+export interface BalancePurchasingPowerShift {
+  countryCode: string;
+  countryName: string;
+  latestMonth: string | null;
+  inflationPct: number;
+  purchasingPowerShiftPct: number;
+  isIncrease: boolean;
+  source: "worldbank-gem" | "bundled";
 }
 
 export interface ExchangeRateSnapshot {

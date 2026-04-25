@@ -8,8 +8,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const smsText = typeof req.body?.smsText === "string" ? req.body.smsText : "";
-    const result = await categorizeSmsText(smsText);
+    const messageText =
+      typeof req.body?.messageText === "string"
+        ? req.body.messageText
+        : typeof req.body?.smsText === "string"
+          ? req.body.smsText
+          : "";
+    const result = await categorizeSmsText(messageText);
     res.status(200).json(result);
   } catch (error) {
     console.error("AI categorize error:", error);

@@ -60,6 +60,7 @@
             <li>Currency exchange monitoring</li>
             <li>Smart saving recommendations</li>
             <li>SMS-based transaction import (on Android devices)</li>
+            <li>Email inbox scanning for transaction alerts and receipts (on demand)</li>
         </ul>
 
         <h2>3. User Accounts</h2>
@@ -75,7 +76,7 @@
             <li>Be responsible for all activities under your account</li>
         </ul>
 
-        <h2>4. SMS Data and Permissions</h2>
+        <h2>4. Import Data and Permissions</h2>
         <h3>4.1 SMS Access (Android)</h3>
         <p>On Android devices, SmartBudget may request permission to read SMS messages for the purpose of identifying and importing financial transactions. This access is used solely for:</p>
         <ul>
@@ -84,8 +85,16 @@
             <li>Automatically updating your financial ledger</li>
         </ul>
 
-        <h3>4.2 Data Processing</h3>
-        <p>SMS content is processed locally on your device when possible. Only confirmed transaction data is stored in your account. Raw SMS content is not permanently stored or transmitted unless you explicitly enable cloud synchronization.</p>
+        <h3>4.2 Email Inbox Scanning</h3>
+        <p>You may also choose to scan an email inbox over IMAP by providing the mailbox address, an app password, and optional custom server settings. This access is used solely for:</p>
+        <ul>
+            <li>Reviewing recent bank alert emails and receipts</li>
+            <li>Extracting transaction details for your ledger</li>
+            <li>Reducing duplicate transaction imports</li>
+        </ul>
+
+        <h3>4.3 Data Processing</h3>
+        <p>SMS content is processed locally on your device when possible. Email inbox scans run only when you explicitly request them. Confirmed transaction data and limited import metadata may be stored in your account to support review and duplicate detection.</p>
 
         <h2>5. Data Privacy and Security</h2>
         <p>Your privacy is important to us. Please review our Privacy Policy for detailed information about how we collect, use, and protect your data. By using SmartBudget, you consent to the data practices described in our Privacy Policy.</p>

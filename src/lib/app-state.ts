@@ -1,4 +1,4 @@
-import type { CurrencyCode, ScreenKey, Transaction, SmartSavePlusState } from "../types";
+import type { CurrencyCode, EmailScannerConfig, ScreenKey, Transaction, SmartSavePlusState } from "../types";
 import { normalizeCurrencyCode } from "./exchange-rates";
 
 const DEVICE_STATE_KEY = "smartbudget-device-state-v2";
@@ -8,6 +8,7 @@ export const DEFAULT_SMART_SAVE_GOAL = 500;
 export type DeviceState = {
   smsAccess: boolean;
   activeScreen: ScreenKey;
+  emailScanner: EmailScannerConfig;
 };
 
 export type CloudState = {
@@ -21,6 +22,16 @@ export function createDefaultDeviceState(): DeviceState {
   return {
     smsAccess: false,
     activeScreen: "dashboard",
+    emailScanner: createDefaultEmailScannerConfig(),
+  };
+}
+
+export function createDefaultEmailScannerConfig(): EmailScannerConfig {
+  return {
+    emailAddress: "",
+    host: "",
+    port: 993,
+    mailbox: "INBOX",
   };
 }
 
@@ -52,6 +63,7 @@ export function loadDeviceState(): DeviceState {
     return {
       smsAccess: Boolean(parsed.smsAccess),
       activeScreen: isScreenKey(parsed.activeScreen) ? parsed.activeScreen : "dashboard",
+      emailScanner: normalizeEmailScannerConfig(parsed.emailScanner),
     };
   } catch {
     return createDefaultDeviceState();
@@ -102,6 +114,23 @@ function normalizeSmartSavePlusState(value: unknown): SmartSavePlusState {
   };
 }
 
+function normalizeEmailScannerConfig(value: unknown): EmailScannerConfig {
+  const fallback = createDefaultEmailScannerConfig();
+
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+
+  const parsed = value as Partial<EmailScannerConfig>;
+
+  return {
+    emailAddress: typeof parsed.emailAddress === "string" ? parsed.emailAddress.trim() : fallback.emailAddress,
+    host: typeof parsed.host === "string" ? parsed.host.trim() : fallback.host,
+    port: Number.isFinite(Number(parsed.port)) && Number(parsed.port) > 0 ? Number(parsed.port) : fallback.port,
+    mailbox: typeof parsed.mailbox === "string" && parsed.mailbox.trim() ? parsed.mailbox.trim() : fallback.mailbox,
+  };
+}
+
 export function isScreenKey(value: unknown): value is ScreenKey {
   return (
     value === "dashboard" ||
@@ -114,7 +143,7 @@ export function isScreenKey(value: unknown): value is ScreenKey {
 }
 
 export function normalizeTransactionSource(transaction: Transaction): Transaction {
-  if (transaction.source === "sms" || transaction.source === "manual") {
+  if (transaction.source === "sms" || transaction.source === "email" || transaction.source === "manual") {
     return transaction;
   }
 
@@ -148,7 +177,7 @@ function normalizeTransaction(value: unknown): Transaction | null {
       ? parsed.category
       : "Other";
   const kind = parsed.kind === "income" || parsed.kind === "expense" ? parsed.kind : "expense";
-  const source = parsed.source === "sms" ? "sms" : "manual";
+  const source = parsed.source === "sms" || parsed.source === "email" ? parsed.source : "manual";
 
   return {
     id: typeof parsed.id === "string" && parsed.id.trim() ? parsed.id : crypto.randomUUID(),
@@ -160,5 +189,8 @@ function normalizeTransaction(value: unknown): Transaction | null {
     kind,
     source,
     rawSms: typeof parsed.rawSms === "string" && parsed.rawSms.trim() ? parsed.rawSms.trim() : undefined,
+    rawEmail: typeof parsed.rawEmail === "string" && parsed.rawEmail.trim() ? parsed.rawEmail.trim() : undefined,
+    emailSubject: typeof parsed.emailSubject === "string" && parsed.emailSubject.trim() ? parsed.emailSubject.trim() : undefined,
+    sourceMessageId: typeof parsed.sourceMessageId === "string" && parsed.sourceMessageId.trim() ? parsed.sourceMessageId.trim() : undefined,
   };
 }

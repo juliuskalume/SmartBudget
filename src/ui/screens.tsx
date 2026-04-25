@@ -57,6 +57,7 @@ import type {
   BalancePurchasingPowerShift,
   Category,
   CurrencyCode,
+  EmailScannerConfig,
   ExchangeRateSnapshot,
   FinancialSummary,
   InvestmentRecommendations,
@@ -134,6 +135,18 @@ function createManualDraft(localCurrency: CurrencyCode, kind: Transaction["kind"
 
 function getManualTileIdForCategory(category: Category) {
   return transactionCategoryTiles.find((tile) => tile.category === category)?.id ?? transactionCategoryTiles[0].id;
+}
+
+function formatTransactionSourceLabel(source: Transaction["source"]) {
+  if (source === "sms") {
+    return "SMS";
+  }
+
+  if (source === "email") {
+    return "Email";
+  }
+
+  return "Manual";
 }
 
 export function DashboardScreen({
@@ -420,10 +433,14 @@ export function TransactionsScreen({
   exchangeRates,
   isAndroidNative,
   isImportingNativeSms,
+  isImportingEmailInbox,
+  emailScannerConfig,
   onAddManualTransaction,
   onUpdateTransaction,
   onDeleteTransaction,
   onImportNativeSms,
+  onImportEmailInbox,
+  onUpdateEmailScannerConfig,
   onSetScreen,
 }: {
   transactions: Transaction[];
@@ -431,15 +448,20 @@ export function TransactionsScreen({
   exchangeRates: ExchangeRateSnapshot | null;
   isAndroidNative: boolean;
   isImportingNativeSms: boolean;
+  isImportingEmailInbox: boolean;
+  emailScannerConfig: EmailScannerConfig;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onImportNativeSms: () => void;
+  onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
+  onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
   onSetScreen: (screen: ScreenKey) => void;
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
+  const [emailPassword, setEmailPassword] = useState("");
   const currencyChoices = getCurrencyChoices(displayCurrency);
   const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft(displayCurrency));
   const [selectedManualTileId, setSelectedManualTileId] = useState(() => getManualTileIdForCategory(createManualDraft(displayCurrency).category));
@@ -480,7 +502,9 @@ export function TransactionsScreen({
   const filtered = transactions.filter((transaction) => {
     const matchesQuery =
       query.trim().length === 0 ||
-      `${transaction.merchant} ${transaction.category} ${transaction.rawSms ?? ""}`.toLowerCase().includes(query.toLowerCase().trim());
+      `${transaction.merchant} ${transaction.category} ${transaction.rawSms ?? ""} ${transaction.rawEmail ?? ""} ${transaction.emailSubject ?? ""}`
+        .toLowerCase()
+        .includes(query.toLowerCase().trim());
     const matchesCategory = categoryFilter === "all" || transaction.category === categoryFilter;
     const matchesSource = sourceFilter === "all" || transaction.source === sourceFilter;
     return matchesQuery && matchesCategory && matchesSource;
@@ -530,6 +554,108 @@ export function TransactionsScreen({
             </button>
           ) : null}
         </div>
+      </Panel>
+
+      <Panel
+        title="Email Inbox Scan"
+        subtitle="Connect a mailbox over IMAP and scan the most recent emails for bank alerts and receipts."
+        className="composer-panel"
+      >
+          <div className="sync-card sync-card--full">
+            <div className="sync-card__icon">
+              <Mail size={18} />
+            </div>
+            <div className="sync-card__content">
+              <strong>On-demand email import for transaction alerts</strong>
+              <p>Use an app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to use automatic provider detection.</p>
+            </div>
+          </div>
+
+          <div className="manual-grid">
+            <label className="field">
+              <span>Email address</span>
+              <input
+                className="input"
+                type="email"
+                value={emailScannerConfig.emailAddress}
+                onChange={(event) => onUpdateEmailScannerConfig({ emailAddress: event.target.value })}
+                placeholder="alerts@yourmail.com"
+                autoComplete="email"
+              />
+            </label>
+
+            <label className="field">
+              <span>App password</span>
+              <input
+                className="input"
+                type="password"
+                value={emailPassword}
+                onChange={(event) => setEmailPassword(event.target.value)}
+                placeholder="Email app password"
+                autoComplete="current-password"
+              />
+            </label>
+
+            <label className="field">
+              <span>IMAP host (optional)</span>
+              <input
+                className="input"
+                type="text"
+                value={emailScannerConfig.host}
+                onChange={(event) => onUpdateEmailScannerConfig({ host: event.target.value })}
+                placeholder="imap.example.com"
+              />
+            </label>
+
+            <label className="field">
+              <span>Port</span>
+              <input
+                className="input"
+                type="number"
+                inputMode="numeric"
+                min="1"
+                max="65535"
+                value={String(emailScannerConfig.port)}
+                onChange={(event) =>
+                  onUpdateEmailScannerConfig({
+                    port: event.target.value ? Number(event.target.value) : 993,
+                  })
+                }
+              />
+            </label>
+
+            <label className="field">
+              <span>Mailbox</span>
+              <input
+                className="input"
+                type="text"
+                value={emailScannerConfig.mailbox}
+                onChange={(event) => onUpdateEmailScannerConfig({ mailbox: event.target.value })}
+                placeholder="INBOX"
+              />
+            </label>
+          </div>
+
+          <div className="button-row button-row--tight">
+            <button
+              className="button button--secondary"
+              type="button"
+              onClick={() => {
+                void onImportEmailInbox({
+                  ...emailScannerConfig,
+                  appPassword: emailPassword,
+                }).then((scanned) => {
+                  if (scanned) {
+                    setEmailPassword("");
+                  }
+                });
+              }}
+              disabled={isImportingEmailInbox}
+            >
+              <Mail size={16} />
+              {isImportingEmailInbox ? "Scanning..." : "Scan email inbox"}
+            </button>
+          </div>
       </Panel>
 
       <Panel
@@ -664,7 +790,7 @@ export function TransactionsScreen({
             Save Manual Entry
           </button>
         </div>
-      </Panel>
+        </Panel>
 
       <Panel
         title="Transaction List"
@@ -683,7 +809,7 @@ export function TransactionsScreen({
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search merchant, SMS text, or category"
+              placeholder="Search merchant, imported text, or category"
             />
           </label>
 
@@ -708,6 +834,7 @@ export function TransactionsScreen({
             >
               <option value="all">All sources</option>
               <option value="sms">SMS</option>
+              <option value="email">Email</option>
               <option value="manual">Manual</option>
             </select>
           </label>
@@ -800,8 +927,10 @@ export function TransactionsScreen({
                       )}
                     </td>
                     <td>
-                      <Badge tone={transaction.source === "sms" ? "success" : "neutral"}>
-                        {transaction.source.toUpperCase()}
+                      <Badge
+                        tone={transaction.source === "sms" ? "success" : transaction.source === "email" ? "warning" : "neutral"}
+                      >
+                        {formatTransactionSourceLabel(transaction.source)}
                       </Badge>
                     </td>
                     <td className="table-actions">
@@ -819,8 +948,8 @@ export function TransactionsScreen({
               description={
                 transactions.length === 0
                   ? isAndroidNative
-                    ? "Wait for the first bank SMS or add a manual cash entry above."
-                    : "Sync transactions from the Android app or add a manual debit or credit above to create the first entry."
+                    ? "Wait for the first bank SMS, scan your email inbox, or add a manual cash entry above."
+                    : "Scan your email inbox, sync transactions from the Android app, or add a manual debit or credit above to create the first entry."
                   : "Try clearing the search bar or sync another transaction."
               }
             />
