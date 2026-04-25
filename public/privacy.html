@@ -99,6 +99,7 @@
             <li><strong>Device Information:</strong> Device type, operating system, app version</li>
             <li><strong>Usage Data:</strong> App usage patterns, feature interactions, error logs</li>
             <li><strong>SMS Data (Android only):</strong> Bank alert messages for transaction import</li>
+            <li><strong>Email Data (optional):</strong> Recent inbox messages that you explicitly scan over IMAP for transaction import</li>
         </ul>
 
         <h3>1.3 Third-Party Data</h3>
@@ -117,12 +118,13 @@
             <li>Provide currency conversion services</li>
         </ul>
 
-        <h3>2.2 SMS Processing (Android)</h3>
+        <h3>2.2 SMS and Email Processing</h3>
         <ul>
             <li>Scan incoming SMS messages for bank alerts</li>
+            <li>Scan recent inbox emails that you explicitly request SmartBudget to review</li>
             <li>Extract transaction details (amount, date, merchant)</li>
             <li>Automatically categorize and add transactions to your ledger</li>
-            <li>Store only confirmed transaction data, not raw SMS content</li>
+            <li>Keep transaction-related metadata needed to review imports and avoid duplicate ledger entries</li>
         </ul>
 
         <h3>2.3 Service Improvement</h3>
@@ -158,13 +160,14 @@
             <li>Accessible only with your account credentials</li>
         </ul>
 
-        <h3>3.3 SMS Data Handling</h3>
+        <h3>3.3 SMS and Email Data Handling</h3>
         <div class="highlight-box">
-            <strong>SMS Privacy Protection:</strong>
+            <strong>Import Privacy Protection:</strong>
             <ul>
                 <li>SMS messages are scanned locally on your device</li>
-                <li>Only transaction-relevant data is extracted and stored</li>
-                <li>Raw SMS content is never permanently stored or transmitted</li>
+                <li>Email inbox scans run only when you trigger them and require your mailbox app password</li>
+                <li>Mailbox passwords are used only for the active scan request and are not saved by SmartBudget</li>
+                <li>Only transaction-relevant data and limited import metadata are stored with your ledger entries</li>
                 <li>You can disable SMS access at any time in device settings</li>
             </ul>
         </div>

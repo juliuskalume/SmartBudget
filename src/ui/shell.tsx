@@ -4,6 +4,7 @@ import type {
   AdviceCard,
   BalancePurchasingPowerShift,
   CurrencyCode,
+  EmailScannerConfig,
   ExchangeRateSnapshot,
   FinancialSummary,
   ManualTransactionDraft,
@@ -41,21 +42,25 @@ export function AppShell({
   targetCurrency,
   smartSaveGoal,
   isImportingNativeSms,
+  isImportingEmailInbox,
   isRefreshingAdvice,
   isSavingProfile,
   isUpdatingPassword,
   isDeletingAccount,
+  emailScannerConfig,
   adviceCards,
   insights,
   onSelectScreen,
   onSignOut,
   onRefreshAdvice,
   onImportNativeSms,
+  onImportEmailInbox,
   onAddManualTransaction,
   onUpdateTransaction,
   onDeleteTransaction,
   onUpdateGoal,
   onUpdateTargetCurrency,
+  onUpdateEmailScannerConfig,
   onSaveProfileDetails,
   onUpdatePassword,
   onOpenSupportComposer,
@@ -81,21 +86,25 @@ export function AppShell({
   targetCurrency: CurrencyCode;
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
+  isImportingEmailInbox: boolean;
   isRefreshingAdvice: boolean;
   isSavingProfile: boolean;
   isUpdatingPassword: boolean;
   isDeletingAccount: boolean;
+  emailScannerConfig: EmailScannerConfig;
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
   onSignOut: () => Promise<void>;
   onRefreshAdvice: () => void;
   onImportNativeSms: () => void;
+  onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
+  onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
@@ -131,10 +140,12 @@ export function AppShell({
     targetCurrency,
     smartSaveGoal,
     isImportingNativeSms,
+    isImportingEmailInbox,
     isRefreshingAdvice,
     isSavingProfile,
     isUpdatingPassword,
     isDeletingAccount,
+    emailScannerConfig,
     adviceCards,
     insights,
     onSelectScreen,
@@ -144,7 +155,9 @@ export function AppShell({
     onUpdateGoal,
     onUpdateTargetCurrency,
     onImportNativeSms,
+    onImportEmailInbox,
     onRefreshAdvice,
+    onUpdateEmailScannerConfig,
     onSaveProfileDetails,
     onUpdatePassword,
     onOpenSupportComposer,
@@ -246,10 +259,12 @@ function renderScreen({
   targetCurrency,
   smartSaveGoal,
   isImportingNativeSms,
+  isImportingEmailInbox,
   isRefreshingAdvice,
   isSavingProfile,
   isUpdatingPassword,
   isDeletingAccount,
+  emailScannerConfig,
   adviceCards,
   insights,
   onSelectScreen,
@@ -259,7 +274,9 @@ function renderScreen({
   onUpdateGoal,
   onUpdateTargetCurrency,
   onImportNativeSms,
+  onImportEmailInbox,
   onRefreshAdvice,
+  onUpdateEmailScannerConfig,
   onSaveProfileDetails,
   onUpdatePassword,
   onOpenSupportComposer,
@@ -290,10 +307,12 @@ function renderScreen({
   targetCurrency: CurrencyCode;
   smartSaveGoal: number;
   isImportingNativeSms: boolean;
+  isImportingEmailInbox: boolean;
   isRefreshingAdvice: boolean;
   isSavingProfile: boolean;
   isUpdatingPassword: boolean;
   isDeletingAccount: boolean;
+  emailScannerConfig: EmailScannerConfig;
   adviceCards: AdviceCard[];
   insights: string[];
   onSelectScreen: (screen: ScreenKey) => void;
@@ -303,7 +322,9 @@ function renderScreen({
   onUpdateGoal: (value: number) => void;
   onUpdateTargetCurrency: (value: CurrencyCode) => void;
   onImportNativeSms: () => void;
+  onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
   onRefreshAdvice: () => void;
+  onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
@@ -344,10 +365,14 @@ function renderScreen({
           exchangeRates={exchangeRates}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
+          isImportingEmailInbox={isImportingEmailInbox}
+          emailScannerConfig={emailScannerConfig}
           onAddManualTransaction={onAddManualTransaction}
           onUpdateTransaction={onUpdateTransaction}
           onDeleteTransaction={onDeleteTransaction}
           onImportNativeSms={onImportNativeSms}
+          onImportEmailInbox={onImportEmailInbox}
+          onUpdateEmailScannerConfig={onUpdateEmailScannerConfig}
           onSetScreen={onSelectScreen}
         />
       );

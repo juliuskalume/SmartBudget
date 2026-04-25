@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { Session as SupabaseSession } from "@supabase/supabase-js";
-import { App } from "@capacitor/app";
+import { App as CapacitorApp } from "@capacitor/app";
 import { demoTransactions } from "./lib/demo";
 import {
   consumePendingAndroidSmsMessages,
@@ -11,6 +11,7 @@ import {
 } from "./lib/android-sms";
 import {
   DEFAULT_SMART_SAVE_GOAL,
+  createDefaultEmailScannerConfig,
   createDefaultCloudState,
   loadDeviceState,
   saveDeviceState,
@@ -30,7 +31,7 @@ import {
   formatMoney,
   normalizeAdviceType,
   normalizeCategory,
-  parseSmsTransaction,
+  parseBankMessageTransaction,
   projectSavings,
 } from "./lib/finance";
 import { getBalancePurchasingPowerShift, getCountryByCode, getCountryCurrency, getCountryOptions, inferCountryCodeFromLocale } from "./lib/countries";
@@ -43,6 +44,7 @@ import type {
   AdviceCard,
   BalancePurchasingPowerShift,
   CurrencyCode,
+  EmailScannerConfig,
   ExchangeRateSnapshot,
   ManualTransactionDraft,
   ScreenKey,
@@ -68,13 +70,26 @@ type Flash = {
   message: string;
 };
 
-type SmsClassification = {
+type MessageClassification = {
   isTransaction: boolean;
   merchant: string;
   amount: number;
   category: Transaction["category"];
   kind: Transaction["kind"];
   currency: CurrencyCode;
+};
+
+type EmailInboxMessage = {
+  uid: string;
+  messageId: string;
+  date: number;
+  subject: string;
+  from: string;
+  text: string;
+};
+
+type EmailScanInput = EmailScannerConfig & {
+  appPassword: string;
 };
 
 const SUPPORT_EMAIL = "sentira.official@gmail.com";
@@ -101,6 +116,7 @@ function App() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isRefreshingAdvice, setIsRefreshingAdvice] = useState(false);
   const [isImportingNativeSms, setIsImportingNativeSms] = useState(false);
+  const [isImportingEmailInbox, setIsImportingEmailInbox] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -124,7 +140,7 @@ function App() {
           // On dashboard (main screen), show exit confirmation
           const shouldExit = window.confirm("Are you sure you want to exit SmartBudget?");
           if (shouldExit) {
-            App.exitApp();
+            CapacitorApp.exitApp();
           }
         } else {
           // On any other screen, navigate back to dashboard
@@ -132,10 +148,10 @@ function App() {
         }
       };
 
-      const backButtonListener = App.addListener("backButton", handleBackButton);
+      const backButtonListener = CapacitorApp.addListener("backButton", handleBackButton);
 
       return () => {
-        backButtonListener.remove();
+        void Promise.resolve(backButtonListener).then((listener) => listener?.remove());
       };
     } catch (error) {
       console.error("Failed to setup back button handler:", error);
@@ -307,6 +323,26 @@ function App() {
       void Promise.resolve(subscription).then((listener) => listener?.remove());
     };
   }, [deviceState.smsAccess, isAndroidNative, session]);
+
+  useEffect(() => {
+    if (!session?.email) {
+      return;
+    }
+
+    setDeviceState((current) => {
+      if (current.emailScanner.emailAddress.trim()) {
+        return current;
+      }
+
+      return {
+        ...current,
+        emailScanner: {
+          ...current.emailScanner,
+          emailAddress: session.email,
+        },
+      };
+    });
+  }, [session?.email]);
 
   const displayCurrency = session?.localCurrency ?? getCountryCurrency(selectedCountryCode);
 
@@ -554,6 +590,16 @@ function App() {
 
   function updateTargetCurrency(value: CurrencyCode) {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
+  }
+
+  function updateEmailScannerConfig(value: Partial<EmailScannerConfig>) {
+    setDeviceState((current) => ({
+      ...current,
+      emailScanner: {
+        ...current.emailScanner,
+        ...value,
+      },
+    }));
   }
 
   function buyProtectedCurrency(amount: number, currency: CurrencyCode, bankId: string) {
@@ -821,14 +867,14 @@ function App() {
     }
   }
 
-  async function classifySmsTransaction(rawSms: string): Promise<SmsClassification | null> {
-    const trimmedSms = rawSms.trim();
-    if (!trimmedSms) {
+  async function classifyMessageTransaction(rawText: string, source: "sms" | "email"): Promise<MessageClassification | null> {
+    const trimmedText = rawText.trim();
+    if (!trimmedText) {
       return null;
     }
 
-    const parsed = parseSmsTransaction(trimmedSms);
-    let fallback: SmsClassification | null = parsed
+    const parsed = parseBankMessageTransaction(trimmedText, source);
+    let fallback: MessageClassification | null = parsed
       ? {
           isTransaction: true,
           merchant: parsed.merchant,
@@ -845,7 +891,7 @@ function App() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ smsText: trimmedSms }),
+        body: JSON.stringify({ messageText: trimmedText, channel: source }),
       });
 
       if (response.ok) {
@@ -889,7 +935,7 @@ function App() {
       return null;
     }
 
-    const classification = await classifySmsTransaction(rawSms);
+    const classification = await classifyMessageTransaction(rawSms, "sms");
     if (!classification?.isTransaction) {
       return null;
     }
@@ -906,6 +952,36 @@ function App() {
       kind: classification.kind,
       source: "sms",
       rawSms,
+    };
+  }
+
+  async function convertIncomingEmailToTransaction(message: EmailInboxMessage): Promise<Transaction | null> {
+    const rawEmail = buildEmailImportText(message);
+    if (!rawEmail) {
+      return null;
+    }
+
+    const classification = await classifyMessageTransaction(rawEmail, "email");
+    if (!classification?.isTransaction) {
+      return null;
+    }
+
+    const date = Number.isFinite(message.date) ? new Date(message.date).toISOString() : new Date().toISOString();
+    const sourceMessageId = buildEmailMessageKey(message);
+    const subject = message.subject.trim();
+
+    return {
+      id: `email-${sourceMessageId || crypto.randomUUID()}`,
+      date,
+      merchant: classification.merchant || "Unknown Merchant",
+      amount: classification.amount,
+      currency: classification.currency,
+      category: classification.category,
+      kind: classification.kind,
+      source: "email",
+      rawEmail: buildEmailPreview(rawEmail),
+      emailSubject: subject || undefined,
+      sourceMessageId: sourceMessageId || undefined,
     };
   }
 
@@ -992,6 +1068,136 @@ function App() {
       ignoredCount,
       duplicateCount,
     };
+  }
+
+  async function ingestEmailInboxMessages(messages: EmailInboxMessage[]) {
+    if (messages.length === 0) {
+      flashMessage("warning", "No bank-like emails were found in the selected mailbox.");
+      return {
+        addedCount: 0,
+        ignoredCount: 0,
+        duplicateCount: 0,
+      };
+    }
+
+    const seenIncoming = new Set<string>();
+    const candidates: EmailInboxMessage[] = [];
+    let duplicateCount = 0;
+
+    for (const message of messages) {
+      const rawEmail = buildEmailImportText(message);
+      if (!rawEmail) {
+        continue;
+      }
+
+      const candidateKeys = [buildEmailMessageKey(message), rawEmail].filter((value): value is string => Boolean(value));
+      if (candidateKeys.some((key) => seenIncoming.has(key))) {
+        duplicateCount += 1;
+        continue;
+      }
+
+      candidateKeys.forEach((key) => seenIncoming.add(key));
+      candidates.push(message);
+    }
+
+    const resolved = await Promise.all(candidates.map((message) => convertIncomingEmailToTransaction(message)));
+    const transactions = resolved.filter((transaction): transaction is Transaction => transaction !== null);
+    let addedCount = 0;
+
+    if (transactions.length > 0) {
+      setCloudState((current) => {
+        const merged = mergeTransactions(current.transactions, transactions);
+        addedCount = merged.addedCount;
+        if (merged.addedCount === 0) {
+          return current;
+        }
+
+        return {
+          ...current,
+          transactions: merged.transactions,
+        };
+      });
+    }
+
+    duplicateCount += Math.max(0, transactions.length - addedCount);
+    const ignoredCount = Math.max(0, candidates.length - transactions.length);
+
+    if (addedCount > 0) {
+      setAiAdvice(null);
+      flashMessage("success", `Added ${addedCount} transaction${addedCount === 1 ? "" : "s"} from bank emails.`);
+    } else if (duplicateCount > 0) {
+      flashMessage("neutral", "These email alerts were already synced.");
+    } else if (ignoredCount > 0) {
+      flashMessage("warning", "SmartBudget scanned those emails, but none of them looked like bank transactions.");
+    }
+
+    return {
+      addedCount,
+      ignoredCount,
+      duplicateCount,
+    };
+  }
+
+  async function importEmailInbox(input: EmailScanInput) {
+    const emailAddress = input.emailAddress.trim().toLowerCase();
+    const appPassword = input.appPassword.trim();
+    const host = input.host.trim();
+    const mailbox = input.mailbox.trim() || createDefaultEmailScannerConfig().mailbox;
+    const parsedPort = Number(input.port);
+    const port = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : createDefaultEmailScannerConfig().port;
+
+    if (!emailAddress || !emailAddress.includes("@")) {
+      flashMessage("warning", "Enter the email address you want SmartBudget to scan.");
+      return false;
+    }
+
+    if (!appPassword) {
+      flashMessage("warning", "Enter an app password before scanning your email inbox.");
+      return false;
+    }
+
+    updateEmailScannerConfig({
+      emailAddress,
+      host,
+      mailbox,
+      port,
+    });
+
+    setIsImportingEmailInbox(true);
+
+    try {
+      const response = await fetch("/api/email/scan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          emailAddress,
+          appPassword,
+          host: host || undefined,
+          port,
+          mailbox,
+          limit: 40,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === "string" ? payload.error : "Unable to scan the email inbox.");
+      }
+
+      const messages = Array.isArray(payload?.messages)
+        ? payload.messages.map((entry) => sanitizeEmailInboxMessage(entry)).filter((entry): entry is EmailInboxMessage => entry !== null)
+        : [];
+
+      await ingestEmailInboxMessages(messages);
+      return true;
+    } catch (error) {
+      flashMessage("error", error instanceof Error ? error.message : "Unable to scan the email inbox.");
+      return false;
+    } finally {
+      setIsImportingEmailInbox(false);
+    }
   }
 
   function addManualTransaction(entry: ManualTransactionDraft) {
@@ -1206,21 +1412,25 @@ function App() {
         targetCurrency={cloudState.targetCurrency}
         smartSaveGoal={cloudState.smartSaveGoal}
         isImportingNativeSms={isImportingNativeSms}
+        isImportingEmailInbox={isImportingEmailInbox}
         isRefreshingAdvice={isRefreshingAdvice}
         isSavingProfile={isSavingProfile}
         isUpdatingPassword={isUpdatingPassword}
         isDeletingAccount={isDeletingAccount}
+        emailScannerConfig={deviceState.emailScanner}
         adviceCards={adviceCards}
         insights={insights}
         onSelectScreen={updateScreen}
         onSignOut={handleSignOut}
         onRefreshAdvice={refreshAdvice}
         onImportNativeSms={handleAllowSmsAccess}
+        onImportEmailInbox={importEmailInbox}
         onAddManualTransaction={addManualTransaction}
         onUpdateTransaction={updateTransaction}
         onDeleteTransaction={deleteTransaction}
         onUpdateGoal={updateGoal}
         onUpdateTargetCurrency={updateTargetCurrency}
+        onUpdateEmailScannerConfig={updateEmailScannerConfig}
         onSaveProfileDetails={saveProfileDetails}
         onUpdatePassword={updatePassword}
         onOpenSupportComposer={openSupportComposer}
@@ -1351,26 +1561,76 @@ function sanitizeAdviceCard(card: unknown): AdviceCard | null {
   };
 }
 
+function sanitizeEmailInboxMessage(value: unknown): EmailInboxMessage | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const parsed = value as Record<string, unknown>;
+  const subject = typeof parsed.subject === "string" ? parsed.subject.trim() : "";
+  const from = typeof parsed.from === "string" ? parsed.from.trim() : "";
+  const text = typeof parsed.text === "string" ? parsed.text.trim() : "";
+  const messageId = typeof parsed.messageId === "string" ? parsed.messageId.trim() : "";
+  const uid = typeof parsed.uid === "string" ? parsed.uid.trim() : "";
+  const date = Number(parsed.date);
+
+  if (!text) {
+    return null;
+  }
+
+  return {
+    uid,
+    messageId,
+    date: Number.isFinite(date) ? date : Date.now(),
+    subject,
+    from,
+    text,
+  };
+}
+
+function buildEmailImportText(message: Pick<EmailInboxMessage, "subject" | "from" | "text">) {
+  return [message.subject.trim(), message.from.trim(), message.text.trim()].filter(Boolean).join("\n").trim().slice(0, 4000);
+}
+
+function buildEmailMessageKey(message: Pick<EmailInboxMessage, "messageId" | "uid" | "subject" | "date">) {
+  const messageId = message.messageId.trim();
+  if (messageId) {
+    return messageId;
+  }
+
+  const uid = message.uid.trim();
+  if (uid) {
+    return `uid:${uid}`;
+  }
+
+  const subject = message.subject.trim();
+  return subject ? `${subject}:${message.date}` : `${message.date}`;
+}
+
+function buildEmailPreview(text: string) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized.length > 280 ? `${normalized.slice(0, 277)}...` : normalized;
+}
+
+function getTransactionDedupKeys(transaction: Pick<Transaction, "sourceMessageId" | "rawSms" | "rawEmail">) {
+  return [transaction.sourceMessageId, transaction.rawSms, transaction.rawEmail]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+}
+
 function mergeTransactions(existing: Transaction[], incoming: Transaction[]) {
-  const seenSms = new Set(
-    existing
-      .map((transaction) => transaction.rawSms?.trim())
-      .filter((value): value is string => Boolean(value)),
-  );
+  const seenImports = new Set(existing.flatMap((transaction) => getTransactionDedupKeys(transaction)));
   const seenIds = new Set(existing.map((transaction) => transaction.id));
   const merged: Transaction[] = [];
 
   for (const transaction of incoming) {
-    const rawSms = transaction.rawSms?.trim();
-    if (seenIds.has(transaction.id) || (rawSms && seenSms.has(rawSms))) {
+    const transactionKeys = getTransactionDedupKeys(transaction);
+    if (seenIds.has(transaction.id) || transactionKeys.some((key) => seenImports.has(key))) {
       continue;
     }
 
-    if (rawSms) {
-      seenSms.add(rawSms);
-    }
-
     seenIds.add(transaction.id);
+    transactionKeys.forEach((key) => seenImports.add(key));
     merged.push(transaction);
   }
 

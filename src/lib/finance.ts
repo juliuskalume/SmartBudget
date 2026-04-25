@@ -5,6 +5,7 @@ import type {
   ExchangeRateSnapshot,
   FinancialSummary,
   Transaction,
+  TransactionSource,
   TransactionKind,
 } from "../types";
 import { buildFallbackExchangeRates, normalizeCurrencyCode } from "./exchange-rates";
@@ -100,8 +101,59 @@ const EDUCATION_KEYWORDS = [
   "egitim",
 ];
 
+const TRANSACTION_SIGNAL_KEYWORDS = [
+  "account",
+  "available balance",
+  "bank",
+  "card ending",
+  "cash withdrawal",
+  "charge",
+  "charged",
+  "credit alert",
+  "credited",
+  "debit alert",
+  "debited",
+  "deposit",
+  "deposited",
+  "direct deposit",
+  "money received",
+  "order total",
+  "paid",
+  "payment",
+  "payment received",
+  "posted",
+  "purchase",
+  "receipt",
+  "refund",
+  "statement credit",
+  "transaction",
+  "transfer",
+  "withdrawal",
+  "yatirildi",
+  "harcama",
+  "kart",
+  "hesap",
+];
+
+const MARKETING_KEYWORDS = [
+  "unsubscribe",
+  "promo",
+  "promotion",
+  "coupon",
+  "discount",
+  "sale",
+  "% off",
+  "limited time",
+  "shop now",
+  "deal",
+];
+
 function normalizeText(input: string) {
   return input.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function sanitizeImportedMessage(input: string) {
+  return input.replace(/\u00a0/g, " ").replace(/\r/g, "\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function capitalizeWords(input: string) {
@@ -110,6 +162,25 @@ function capitalizeWords(input: string) {
     .filter(Boolean)
     .map((part) => part[0]?.toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
+}
+
+function looksLikeTransactionAlert(text: string) {
+  const normalized = normalizeText(text);
+  const hasSignal = TRANSACTION_SIGNAL_KEYWORDS.some((keyword) => normalized.includes(keyword));
+  const hasAmountLike = /(?:\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)\s*(?:tl|try|usd|\$|eur|gbp|kes|ngn|ugx|inr|[a-z]{3})/i.test(
+    text,
+  );
+  const looksLikePromo = MARKETING_KEYWORDS.some((keyword) => normalized.includes(keyword));
+
+  if (!hasAmountLike || !hasSignal) {
+    return false;
+  }
+
+  if (looksLikePromo && !/(?:receipt|charged|credited|debited|transaction|refund|payment|purchase|withdrawal|deposit)/i.test(normalized)) {
+    return false;
+  }
+
+  return true;
 }
 
 function parseCurrencyToken(raw: string): CurrencyCode {
@@ -167,9 +238,13 @@ function detectKind(text: string): TransactionKind {
     "iade",
     "girisi",
     "received",
+    "payment received",
+    "direct deposit",
+    "statement credit",
   ];
   const expenseSignals = [
     "harcama",
+    "paid",
     "spent",
     "payment",
     "odem",
@@ -180,6 +255,9 @@ function detectKind(text: string): TransactionKind {
     "kartinizla",
     "card used",
     "purchase",
+    "charged",
+    "debited",
+    "withdrawal",
   ];
 
   if (incomeSignals.some((signal) => normalized.includes(signal))) {
@@ -226,6 +304,8 @@ function extractMerchant(text: string) {
     /(?:at|from|via)\s+([A-Za-z0-9&.'-]+(?:\s+[A-Za-z0-9&.'-]+){0,3})/i,
     /(?:merchant|store|place)\s+([A-Za-z0-9&.'-]+(?:\s+[A-Za-z0-9&.'-]+){0,3})/i,
     /(?:harcama|payment|purchase)\s+(?:icin\s+)?([A-Za-z0-9&.'-]+(?:\s+[A-Za-z0-9&.'-]+){0,3})/i,
+    /(?:merchant|store|payee|vendor|description)\s*[:\-]\s*([A-Za-z0-9&.'/-]+(?:\s+[A-Za-z0-9&.'/-]+){0,4})/i,
+    /(?:purchase|payment|receipt|charge(?:d)?|refund)\s+(?:at|from|to|for)?\s*([A-Za-z0-9&.'/-]+(?:\s+[A-Za-z0-9&.'/-]+){0,4})/i,
   ];
 
   for (const pattern of patterns) {
@@ -252,9 +332,13 @@ function extractMerchant(text: string) {
   return "Unknown Merchant";
 }
 
-export function parseSmsTransaction(rawSms: string): Transaction | null {
-  const text = rawSms.trim();
+export function parseBankMessageTransaction(rawMessage: string, source: Extract<TransactionSource, "sms" | "email"> = "sms"): Transaction | null {
+  const text = sanitizeImportedMessage(rawMessage);
   if (!text) {
+    return null;
+  }
+
+  if (!looksLikeTransactionAlert(text)) {
     return null;
   }
 
@@ -275,9 +359,13 @@ export function parseSmsTransaction(rawSms: string): Transaction | null {
     currency: amount.currency,
     category,
     kind,
-    source: "sms",
-    rawSms: text,
+    source,
+    ...(source === "email" ? { rawEmail: text } : { rawSms: text }),
   };
+}
+
+export function parseSmsTransaction(rawSms: string): Transaction | null {
+  return parseBankMessageTransaction(rawSms, "sms");
 }
 
 export function formatMoney(amount: number, currency: CurrencyCode = "TRY") {
@@ -573,7 +661,7 @@ export function buildWeeklyTrend(
 export function buildInsights(summary: FinancialSummary, transactions: Transaction[], exchangeRates?: ExchangeRateSnapshot | null) {
   if (transactions.length === 0) {
     return [
-      "Import your first bank SMS to start the ledger.",
+      "Import your first bank message or receipt to start the ledger.",
       "Category trends appear after SmartBudget saves real spending data.",
       "Use Smart Save+ after income and expenses are tracked.",
     ];
@@ -696,8 +784,8 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
   const fillers: AdviceCard[] = [
     {
       type: "warning",
-      title: "Keep SMS imports flowing",
-      description: "The more bank SMS messages you import, the sharper your dashboard, alerts, and Smart Save+ projections become.",
+      title: "Keep imports flowing",
+      description: "The more bank SMS messages and email alerts you import, the sharper your dashboard, alerts, and Smart Save+ projections become.",
     },
     {
       type: "success",
