@@ -157,7 +157,7 @@ export function AuthScreen({
         <div className="auth-note">
           <ShieldCheck size={16} />
           {cloudReady
-            ? "Your account and transactions sync to Supabase after login. Android SMS import stays local until the parsed transaction is saved, and email inbox scans can run on demand or with optional auto refresh."
+            ? "Your account and transactions sync to Supabase after login. Android SMS import stays local until the parsed transaction is saved, and experimental email inbox scans can run on demand or with optional auto refresh."
             : "Configure Supabase to enable real login and cloud sync. Demo mode still works for previews."}
         </div>
 

@@ -2049,14 +2049,18 @@ export function ProfileScreen({
           </div>
         </Panel>
 
-        <Panel title="Email inbox scan" subtitle="Scan bank alert emails on demand or keep refreshing them while this app stays open.">
+        <Panel
+          title="Email inbox scan"
+          subtitle="Scan bank alert emails on demand or keep refreshing them while this app stays open."
+          action={<Badge tone="warning">Experimental</Badge>}
+        >
           <div className="stack">
             <div className="sync-card sync-card--full">
               <div className="sync-card__icon">
                 <Mail size={18} />
               </div>
               <div className="sync-card__content">
-                <strong>Session-based email sync for bank alerts</strong>
+                <strong>Experimental email sync for bank alerts</strong>
                 <p>Use a mail app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to auto-detect common providers.</p>
               </div>
             </div>
