@@ -111,6 +111,13 @@ const categoryIconMap = {
 
 const transactionCategories: Category[] = ["Supermarket", "Transport", "Entertainment", "Bills", "Education", "Other"];
 
+const EMAIL_APP_PASSWORD_LINKS = {
+  gmail: "https://myaccount.google.com/apppasswords",
+  outlook: "https://support.microsoft.com/en-gb/account-billing/how-to-get-and-use-app-passwords-5896ed9b-4263-e681-128a-a6f2979a7944",
+  yahoo: "https://help.yahoo.com/kb/account/confirm-delete-password-sln15241.html",
+  icloud: "https://support.apple.com/en-us/102654",
+} as const;
+
 const transactionCategoryTiles = [
   { id: "food", label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
   { id: "transport", label: "Transport", category: "Transport" as const, icon: BusFront },
@@ -2061,7 +2068,25 @@ export function ProfileScreen({
               </div>
               <div className="sync-card__content">
                 <strong>Experimental email sync for bank alerts</strong>
-                <p>Use a mail app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to auto-detect common providers. After the first sync, SmartBudget checks only newer emails.</p>
+                <p>
+                  Use a mail app password for{" "}
+                  <a className="email-settings-link" href={EMAIL_APP_PASSWORD_LINKS.gmail} target="_blank" rel="noreferrer">
+                    Gmail
+                  </a>
+                  ,{" "}
+                  <a className="email-settings-link" href={EMAIL_APP_PASSWORD_LINKS.outlook} target="_blank" rel="noreferrer">
+                    Outlook
+                  </a>
+                  ,{" "}
+                  <a className="email-settings-link" href={EMAIL_APP_PASSWORD_LINKS.yahoo} target="_blank" rel="noreferrer">
+                    Yahoo
+                  </a>
+                  , or{" "}
+                  <a className="email-settings-link" href={EMAIL_APP_PASSWORD_LINKS.icloud} target="_blank" rel="noreferrer">
+                    iCloud
+                  </a>
+                  . Leave IMAP host blank to auto-detect common providers. After the first sync, SmartBudget checks only newer emails.
+                </p>
               </div>
             </div>
 
@@ -2096,9 +2121,7 @@ export function ProfileScreen({
               </label>
 
               <label className="field">
-                <span>
-                  App password (<a className="email-settings-link" href="https://myaccount.google.com/apppasswords">get it here</a>)
-                </span>
+                <span>App password</span>
                 <input
                   className="input"
                   type="password"
