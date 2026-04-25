@@ -18,6 +18,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
     return res.status(200).json(result);
   } catch (error) {
-    return res.status(500).json({ error: error instanceof Error ? error.message : "Unable to scan the email inbox" });
+    const statusCode =
+      typeof (error as { statusCode?: unknown } | null)?.statusCode === "number"
+        ? ((error as { statusCode: number }).statusCode)
+        : 500;
+    return res.status(statusCode).json({ error: error instanceof Error ? error.message : "Unable to scan the email inbox" });
   }
 }

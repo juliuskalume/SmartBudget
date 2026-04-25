@@ -19,6 +19,20 @@ export type EmailInboxMessage = {
   text: string;
 };
 
+type EmailScanError = Error & {
+  statusCode?: number;
+};
+
+type ImapErrorDetails = {
+  message: string;
+  responseText: string;
+  response: string;
+  responseStatus: string;
+  serverResponseCode: string;
+  code: string;
+  authenticationFailed: boolean;
+};
+
 const DEFAULT_MAILBOX = "INBOX";
 const DEFAULT_IMAP_PORT = 993;
 const DEFAULT_SCAN_LIMIT = 40;
@@ -153,6 +167,132 @@ function buildSenderLabel(from: string, envelopeFrom: string) {
   return compact || compactText(envelopeFrom);
 }
 
+function normalizeErrorText(value: unknown) {
+  return typeof value === "string" ? compactText(value) : "";
+}
+
+function createEmailScanError(message: string, statusCode = 500): EmailScanError {
+  const error = new Error(message) as EmailScanError;
+  error.statusCode = statusCode;
+  return error;
+}
+
+function getImapErrorDetails(error: unknown): ImapErrorDetails {
+  if (!error || typeof error !== "object") {
+    return {
+      message: "",
+      responseText: "",
+      response: "",
+      responseStatus: "",
+      serverResponseCode: "",
+      code: "",
+      authenticationFailed: false,
+    };
+  }
+
+  const value = error as Partial<{
+    message: unknown;
+    responseText: unknown;
+    response: unknown;
+    responseStatus: unknown;
+    serverResponseCode: unknown;
+    code: unknown;
+    authenticationFailed: unknown;
+  }>;
+
+  return {
+    message: normalizeErrorText(value.message),
+    responseText: normalizeErrorText(value.responseText),
+    response: normalizeErrorText(value.response),
+    responseStatus: normalizeErrorText(value.responseStatus).toUpperCase(),
+    serverResponseCode: normalizeErrorText(value.serverResponseCode).toUpperCase(),
+    code: normalizeErrorText(value.code).toUpperCase(),
+    authenticationFailed: Boolean(value.authenticationFailed),
+  };
+}
+
+function buildErrorSearchText(details: ImapErrorDetails) {
+  return [details.message, details.responseText, details.response, details.responseStatus, details.serverResponseCode, details.code]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+}
+
+function describeEmailScanFailure(error: unknown) {
+  const details = getImapErrorDetails(error);
+  const searchText = buildErrorSearchText(details);
+
+  if (/enter a valid email address|enter an app password|enter a custom imap host/i.test(searchText)) {
+    return {
+      statusCode: 400,
+      publicMessage: details.message || "Check the email inbox settings and try again.",
+      details,
+    };
+  }
+
+  if (
+    details.authenticationFailed ||
+    details.serverResponseCode === "AUTHENTICATIONFAILED" ||
+    details.serverResponseCode === "AUTHORIZATIONFAILED" ||
+    /auth|login|invalid credentials|username and password not accepted|app password|web browser/i.test(searchText)
+  ) {
+    return {
+      statusCode: 401,
+      publicMessage: "Inbox login failed. Use your email app password and verify IMAP access is enabled.",
+      details,
+    };
+  }
+
+  if (
+    details.serverResponseCode === "NONEXISTENT" ||
+    /mailbox|cannot select|does not exist|unknown mailbox/i.test(searchText)
+  ) {
+    return {
+      statusCode: 400,
+      publicMessage: "The requested mailbox could not be opened. Try INBOX or confirm the mailbox name.",
+      details,
+    };
+  }
+
+  if (details.code === "ETHROTTLE" || /throttled|backoff|rate limit/i.test(searchText)) {
+    return {
+      statusCode: 429,
+      publicMessage: "The email provider is throttling inbox scans. Wait a minute and try again.",
+      details,
+    };
+  }
+
+  if (
+    details.code === "ETIMEDOUT" ||
+    details.code === "ECONNREFUSED" ||
+    details.code === "ECONNRESET" ||
+    details.code === "ENOTFOUND" ||
+    details.code === "EAI_AGAIN" ||
+    details.code === "EHOSTUNREACH" ||
+    /timed out|connect|connection|socket|network|unreachable|dns/i.test(searchText)
+  ) {
+    return {
+      statusCode: 502,
+      publicMessage: "Couldn't reach the IMAP server. Check the host, port, or provider IMAP settings and try again.",
+      details,
+    };
+  }
+
+  if (/command failed/i.test(searchText)) {
+    return {
+      statusCode: 400,
+      publicMessage: "The email provider rejected this IMAP request. Verify the mailbox settings, IMAP access, and app password, then try again.",
+      details,
+    };
+  }
+
+  return {
+    statusCode: 500,
+    publicMessage: details.message || "Unable to scan the email inbox.",
+    details,
+  };
+}
+
 export async function scanEmailInbox(input: EmailScanRequest): Promise<{
   mailbox: string;
   provider: string;
@@ -237,17 +377,21 @@ export async function scanEmailInbox(input: EmailScanRequest): Promise<{
       messages,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to scan the email inbox.";
-
-    if (/auth|login|password|invalid credentials/i.test(message)) {
-      throw new Error("Inbox login failed. Use your email app password and verify IMAP access is enabled.");
-    }
-
-    if (/mailbox/i.test(message)) {
-      throw new Error("The requested mailbox could not be opened. Try INBOX or confirm the mailbox name.");
-    }
-
-    throw new Error(message);
+    const failure = describeEmailScanFailure(error);
+    console.error("Email inbox scan failed", {
+      emailDomain: emailAddress.split("@")[1] ?? "",
+      host: connection.host,
+      port: connection.port,
+      mailbox,
+      provider: connection.provider,
+      code: failure.details.code || null,
+      serverResponseCode: failure.details.serverResponseCode || null,
+      responseStatus: failure.details.responseStatus || null,
+      responseText: failure.details.responseText || null,
+      response: failure.details.response || null,
+      message: failure.details.message || null,
+    });
+    throw createEmailScanError(failure.publicMessage, failure.statusCode);
   } finally {
     lock?.release();
     await client.logout().catch(() => {

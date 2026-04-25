@@ -123,8 +123,12 @@ async function startServer() {
       });
       res.json(result);
     } catch (error) {
-      console.error("Email scan error:", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Unable to scan the email inbox" });
+      const statusCode =
+        typeof (error as { statusCode?: unknown } | null)?.statusCode === "number"
+          ? ((error as { statusCode: number }).statusCode)
+          : 500;
+      console.error("Email scan route error:", error);
+      res.status(statusCode).json({ error: error instanceof Error ? error.message : "Unable to scan the email inbox" });
     }
   });
 
