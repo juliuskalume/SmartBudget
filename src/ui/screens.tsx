@@ -433,14 +433,10 @@ export function TransactionsScreen({
   exchangeRates,
   isAndroidNative,
   isImportingNativeSms,
-  isImportingEmailInbox,
-  emailScannerConfig,
   onAddManualTransaction,
   onUpdateTransaction,
   onDeleteTransaction,
   onImportNativeSms,
-  onImportEmailInbox,
-  onUpdateEmailScannerConfig,
   onSetScreen,
 }: {
   transactions: Transaction[];
@@ -448,20 +444,15 @@ export function TransactionsScreen({
   exchangeRates: ExchangeRateSnapshot | null;
   isAndroidNative: boolean;
   isImportingNativeSms: boolean;
-  isImportingEmailInbox: boolean;
-  emailScannerConfig: EmailScannerConfig;
   onAddManualTransaction: (entry: ManualTransactionDraft) => boolean;
   onUpdateTransaction: (id: string, updates: Partial<Pick<Transaction, "merchant" | "category">>) => boolean;
   onDeleteTransaction: (id: string) => void;
   onImportNativeSms: () => void;
-  onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
-  onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
   onSetScreen: (screen: ScreenKey) => void;
 }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<Category | "all">("all");
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
-  const [emailPassword, setEmailPassword] = useState("");
   const currencyChoices = getCurrencyChoices(displayCurrency);
   const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft(displayCurrency));
   const [selectedManualTileId, setSelectedManualTileId] = useState(() => getManualTileIdForCategory(createManualDraft(displayCurrency).category));
@@ -554,108 +545,6 @@ export function TransactionsScreen({
             </button>
           ) : null}
         </div>
-      </Panel>
-
-      <Panel
-        title="Email Inbox Scan"
-        subtitle="Connect a mailbox over IMAP and scan the most recent emails for bank alerts and receipts."
-        className="composer-panel"
-      >
-          <div className="sync-card sync-card--full">
-            <div className="sync-card__icon">
-              <Mail size={18} />
-            </div>
-            <div className="sync-card__content">
-              <strong>On-demand email import for transaction alerts</strong>
-              <p>Use an app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to use automatic provider detection.</p>
-            </div>
-          </div>
-
-          <div className="manual-grid">
-            <label className="field">
-              <span>Email address</span>
-              <input
-                className="input"
-                type="email"
-                value={emailScannerConfig.emailAddress}
-                onChange={(event) => onUpdateEmailScannerConfig({ emailAddress: event.target.value })}
-                placeholder="alerts@yourmail.com"
-                autoComplete="email"
-              />
-            </label>
-
-            <label className="field">
-              <span>App password</span>
-              <input
-                className="input"
-                type="password"
-                value={emailPassword}
-                onChange={(event) => setEmailPassword(event.target.value)}
-                placeholder="Email app password"
-                autoComplete="current-password"
-              />
-            </label>
-
-            <label className="field">
-              <span>IMAP host (optional)</span>
-              <input
-                className="input"
-                type="text"
-                value={emailScannerConfig.host}
-                onChange={(event) => onUpdateEmailScannerConfig({ host: event.target.value })}
-                placeholder="imap.example.com"
-              />
-            </label>
-
-            <label className="field">
-              <span>Port</span>
-              <input
-                className="input"
-                type="number"
-                inputMode="numeric"
-                min="1"
-                max="65535"
-                value={String(emailScannerConfig.port)}
-                onChange={(event) =>
-                  onUpdateEmailScannerConfig({
-                    port: event.target.value ? Number(event.target.value) : 993,
-                  })
-                }
-              />
-            </label>
-
-            <label className="field">
-              <span>Mailbox</span>
-              <input
-                className="input"
-                type="text"
-                value={emailScannerConfig.mailbox}
-                onChange={(event) => onUpdateEmailScannerConfig({ mailbox: event.target.value })}
-                placeholder="INBOX"
-              />
-            </label>
-          </div>
-
-          <div className="button-row button-row--tight">
-            <button
-              className="button button--secondary"
-              type="button"
-              onClick={() => {
-                void onImportEmailInbox({
-                  ...emailScannerConfig,
-                  appPassword: emailPassword,
-                }).then((scanned) => {
-                  if (scanned) {
-                    setEmailPassword("");
-                  }
-                });
-              }}
-              disabled={isImportingEmailInbox}
-            >
-              <Mail size={16} />
-              {isImportingEmailInbox ? "Scanning..." : "Scan email inbox"}
-            </button>
-          </div>
       </Panel>
 
       <Panel
@@ -948,8 +837,8 @@ export function TransactionsScreen({
               description={
                 transactions.length === 0
                   ? isAndroidNative
-                    ? "Wait for the first bank SMS, scan your email inbox, or add a manual cash entry above."
-                    : "Scan your email inbox, sync transactions from the Android app, or add a manual debit or credit above to create the first entry."
+                    ? "Wait for the first bank SMS, scan your email inbox from settings, or add a manual cash entry above."
+                    : "Scan your email inbox from settings, sync transactions from the Android app, or add a manual debit or credit above to create the first entry."
                   : "Try clearing the search bar or sync another transaction."
               }
             />
@@ -1958,7 +1847,11 @@ export function ProfileScreen({
   isSavingProfile,
   isUpdatingPassword,
   isDeletingAccount,
+  isImportingEmailInbox,
+  emailScannerConfig,
   onSaveProfileDetails,
+  onImportEmailInbox,
+  onUpdateEmailScannerConfig,
   onUpdatePassword,
   onOpenSupportComposer,
   onShareApp,
@@ -1969,7 +1862,11 @@ export function ProfileScreen({
   isSavingProfile: boolean;
   isUpdatingPassword: boolean;
   isDeletingAccount: boolean;
+  isImportingEmailInbox: boolean;
+  emailScannerConfig: EmailScannerConfig;
   onSaveProfileDetails: (input: { name: string; email: string; avatarUrl: string; countryCode: string }) => Promise<boolean>;
+  onImportEmailInbox: (input: EmailScannerConfig & { appPassword: string }) => Promise<boolean>;
+  onUpdateEmailScannerConfig: (input: Partial<EmailScannerConfig>) => void;
   onUpdatePassword: (nextPassword: string) => Promise<boolean>;
   onOpenSupportComposer: (type: "support" | "bug" | "feature") => void;
   onShareApp: () => Promise<boolean>;
@@ -1980,6 +1877,7 @@ export function ProfileScreen({
   const [emailInput, setEmailInput] = useState(session.email);
   const [avatarUrlInput, setAvatarUrlInput] = useState(session.avatarUrl ?? "");
   const [countryCodeInput, setCountryCodeInput] = useState(session.countryCode);
+  const [emailPassword, setEmailPassword] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
   const [confirmPasswordInput, setConfirmPasswordInput] = useState("");
   const [confirmAction, setConfirmAction] = useState<"signout" | "delete" | null>(null);
@@ -2144,6 +2042,110 @@ export function ProfileScreen({
               {canManageAuth
                 ? "Email updates may require confirmation through Supabase before they fully take effect."
                 : "Demo mode keeps these profile changes on this device only."}
+            </p>
+          </div>
+        </Panel>
+
+        <Panel title="Email inbox scan" subtitle="Keep inbox import setup in settings, then pull in transaction emails only when you need them.">
+          <div className="stack">
+            <div className="sync-card sync-card--full">
+              <div className="sync-card__icon">
+                <Mail size={18} />
+              </div>
+              <div className="sync-card__content">
+                <strong>On-demand email import for bank alerts</strong>
+                <p>Use a mail app password for Gmail, Outlook, Yahoo, or iCloud. Leave IMAP host blank to auto-detect common providers.</p>
+              </div>
+            </div>
+
+            <div className="profile-grid">
+              <label className="field">
+                <span>Email address</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={emailScannerConfig.emailAddress}
+                  onChange={(event) => onUpdateEmailScannerConfig({ emailAddress: event.target.value })}
+                  placeholder="alerts@yourmail.com"
+                  autoComplete="email"
+                />
+              </label>
+
+              <label className="field">
+                <span>App password</span>
+                <input
+                  className="input"
+                  type="password"
+                  value={emailPassword}
+                  onChange={(event) => setEmailPassword(event.target.value)}
+                  placeholder="Email app password"
+                  autoComplete="current-password"
+                />
+              </label>
+
+              <label className="field">
+                <span>IMAP host (optional)</span>
+                <input
+                  className="input"
+                  type="text"
+                  value={emailScannerConfig.host}
+                  onChange={(event) => onUpdateEmailScannerConfig({ host: event.target.value })}
+                  placeholder="imap.example.com"
+                />
+              </label>
+
+              <label className="field">
+                <span>Port</span>
+                <input
+                  className="input"
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="65535"
+                  value={String(emailScannerConfig.port)}
+                  onChange={(event) =>
+                    onUpdateEmailScannerConfig({
+                      port: event.target.value ? Number(event.target.value) : 993,
+                    })
+                  }
+                />
+              </label>
+
+              <label className="field">
+                <span>Mailbox</span>
+                <input
+                  className="input"
+                  type="text"
+                  value={emailScannerConfig.mailbox}
+                  onChange={(event) => onUpdateEmailScannerConfig({ mailbox: event.target.value })}
+                  placeholder="INBOX"
+                />
+              </label>
+            </div>
+
+            <div className="button-row button-row--tight">
+              <button
+                className="button button--secondary"
+                type="button"
+                onClick={() => {
+                  void onImportEmailInbox({
+                    ...emailScannerConfig,
+                    appPassword: emailPassword,
+                  }).then((scanned) => {
+                    if (scanned) {
+                      setEmailPassword("");
+                    }
+                  });
+                }}
+                disabled={isImportingEmailInbox}
+              >
+                <Mail size={16} />
+                {isImportingEmailInbox ? "Scanning..." : "Scan email inbox"}
+              </button>
+            </div>
+
+            <p className="helper-copy">
+              SmartBudget uses these settings only for on-demand inbox scans. The app password is not stored after the request finishes.
             </p>
           </div>
         </Panel>

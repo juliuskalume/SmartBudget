@@ -365,14 +365,10 @@ function renderScreen({
           exchangeRates={exchangeRates}
           isAndroidNative={isAndroidNative}
           isImportingNativeSms={isImportingNativeSms}
-          isImportingEmailInbox={isImportingEmailInbox}
-          emailScannerConfig={emailScannerConfig}
           onAddManualTransaction={onAddManualTransaction}
           onUpdateTransaction={onUpdateTransaction}
           onDeleteTransaction={onDeleteTransaction}
           onImportNativeSms={onImportNativeSms}
-          onImportEmailInbox={onImportEmailInbox}
-          onUpdateEmailScannerConfig={onUpdateEmailScannerConfig}
           onSetScreen={onSelectScreen}
         />
       );
@@ -426,7 +422,11 @@ function renderScreen({
           isSavingProfile={isSavingProfile}
           isUpdatingPassword={isUpdatingPassword}
           isDeletingAccount={isDeletingAccount}
+          isImportingEmailInbox={isImportingEmailInbox}
+          emailScannerConfig={emailScannerConfig}
           onSaveProfileDetails={onSaveProfileDetails}
+          onImportEmailInbox={onImportEmailInbox}
+          onUpdateEmailScannerConfig={onUpdateEmailScannerConfig}
           onUpdatePassword={onUpdatePassword}
           onOpenSupportComposer={onOpenSupportComposer}
           onShareApp={onShareApp}
@@ -471,7 +471,7 @@ function getHeaderMeta(activeScreen: ScreenKey) {
     case "profile":
       return {
         title: "Profile",
-        subtitle: "Account settings, support, and sharing",
+        subtitle: "Account settings, email imports, support, and sharing",
       };
     default:
       return {

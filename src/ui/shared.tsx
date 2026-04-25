@@ -51,7 +51,7 @@ export const SCREEN_COPY: Record<ScreenKey, { eyebrow: string; title: string; su
   profile: {
     eyebrow: "Account",
     title: "Profile and support",
-    subtitle: "Manage identity, security, sharing, and support actions from one place.",
+    subtitle: "Manage identity, imports, security, sharing, and support actions from one place.",
   },
 };
 
