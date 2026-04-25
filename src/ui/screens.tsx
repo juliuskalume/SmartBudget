@@ -2046,7 +2046,7 @@ export function ProfileScreen({
           </div>
         </Panel>
 
-        <Panel title="Email inbox scan" subtitle="Keep inbox import setup in settings, then pull in transaction emails only when you need them.">
+        <Panel title="Email inbox scan" subtitle="Automatically import transactions from bank alert emails">
           <div className="stack">
             <div className="sync-card sync-card--full">
               <div className="sync-card__icon">
@@ -2072,7 +2072,7 @@ export function ProfileScreen({
               </label>
 
               <label className="field">
-                <span>App password</span>
+                <span>App password(<a href="https://myaccount.google.com/apppasswords">get it here</a>)</span>
                 <input
                   className="input"
                   type="password"
