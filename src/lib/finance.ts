@@ -1,47 +1,68 @@
-import type {
-  AdviceCard,
-  Category,
-  CurrencyCode,
-  ExchangeRateSnapshot,
-  FinancialSummary,
-  Transaction,
-  TransactionSource,
-  TransactionKind,
-} from "../types";
+import { CATEGORY_VALUES, type AdviceCard, type Category, type CurrencyCode, type ExchangeRateSnapshot, type FinancialSummary, type Transaction, type TransactionSource, type TransactionKind } from "../types";
 import { buildFallbackExchangeRates, normalizeCurrencyCode } from "./exchange-rates";
 
-export const CATEGORY_ORDER: Category[] = [
-  "Supermarket",
-  "Transport",
-  "Entertainment",
-  "Bills",
-  "Education",
-  "Other",
-];
+export const CATEGORY_ORDER: Category[] = [...CATEGORY_VALUES];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
-  Supermarket: "#93ff00",
+  Groceries: "#93ff00",
+  Dining: "#ff8a3d",
   Transport: "#2db7ff",
-  Entertainment: "#ff4fd8",
-  Bills: "#fffd02",
+  Shopping: "#ff6b6b",
+  "Bills & Utilities": "#fffd02",
+  Housing: "#8b5cf6",
+  Health: "#22c55e",
   Education: "#d8dde8",
-  Other: "#ff9a1f",
+  Entertainment: "#ff4fd8",
+  "Cash & ATM": "#f97316",
+  Transfers: "#38bdf8",
+  Salary: "#34d399",
+  Business: "#14b8a6",
+  "Savings & Investment": "#facc15",
+  Refunds: "#a78bfa",
+  Other: "#94a3b8",
 };
 
-const SUPERMARKET_KEYWORDS = [
+const GROCERIES_KEYWORDS = [
   "migros",
   "carrefour",
   "a101",
   "bim",
   "sok",
   "macrocenter",
+  "aldi",
+  "lidl",
+  "walmart",
+  "costco",
+  "whole foods",
+  "fresh market",
   "market",
   "grocery",
   "supermarket",
 ];
 
+const DINING_KEYWORDS = [
+  "restaurant",
+  "cafe",
+  "coffee",
+  "starbucks",
+  "mcdonald",
+  "burger",
+  "pizza",
+  "kfc",
+  "yemek",
+  "food delivery",
+  "yemeksepeti",
+  "getir yemek",
+  "uber eats",
+  "doordash",
+  "grubhub",
+  "takeaway",
+];
+
 const TRANSPORT_KEYWORDS = [
   "uber",
+  "lyft",
+  "bolt",
   "taxi",
   "taksi",
   "metro",
@@ -49,11 +70,107 @@ const TRANSPORT_KEYWORDS = [
   "otobus",
   "train",
   "tren",
+  "tram",
+  "subway",
+  "flight",
+  "airlines",
+  "airport",
   "petrol",
+  "fuel",
+  "gas station",
   "shell",
   "opet",
   "bp",
   "transport",
+];
+
+const SHOPPING_KEYWORDS = [
+  "amazon",
+  "trendyol",
+  "hepsiburada",
+  "n11",
+  "etsy",
+  "ebay",
+  "shopify",
+  "store",
+  "retail",
+  "mall",
+  "fashion",
+  "clothing",
+  "shoe",
+  "cosmetic",
+  "shopping",
+];
+
+const BILLS_KEYWORDS = [
+  "electricity",
+  "elektrik",
+  "water",
+  "su",
+  "internet",
+  "utility",
+  "utilities",
+  "telefon",
+  "phone",
+  "bill",
+  "fatura",
+  "gsm",
+  "mobile",
+  "broadband",
+  "tv",
+  "insurance",
+  "kredi kart",
+  "credit card",
+  "loan",
+  "installment",
+  "subscription fee",
+  "payment due",
+];
+
+const HOUSING_KEYWORDS = [
+  "rent",
+  "kira",
+  "landlord",
+  "lease",
+  "mortgage",
+  "apartment",
+  "home rent",
+  "site aidat",
+  "housing",
+  "property management",
+];
+
+const HEALTH_KEYWORDS = [
+  "hospital",
+  "clinic",
+  "doctor",
+  "pharmacy",
+  "eczane",
+  "medical",
+  "medic",
+  "dentist",
+  "dental",
+  "lab",
+  "health",
+  "wellness",
+];
+
+const EDUCATION_KEYWORDS = [
+  "school",
+  "college",
+  "university",
+  "tuition",
+  "kurs",
+  "course",
+  "book",
+  "kitap",
+  "udemy",
+  "coursera",
+  "education",
+  "egitim",
+  "campus",
+  "exam",
+  "library",
 ];
 
 const ENTERTAINMENT_KEYWORDS = [
@@ -64,41 +181,95 @@ const ENTERTAINMENT_KEYWORDS = [
   "movie",
   "steam",
   "disney",
-  "prime",
-  "cafe",
-  "restaurant",
-  "yemek",
+  "prime video",
+  "youtube premium",
+  "playstation",
+  "xbox",
+  "game",
+  "concert",
+  "ticket",
+  "theater",
 ];
 
-const BILLS_KEYWORDS = [
-  "electricity",
-  "elektrik",
-  "water",
-  "su",
-  "internet",
-  "telefon",
-  "phone",
-  "bill",
-  "fatura",
-  "gsm",
-  "kredi kart",
-  "credit card",
-  "loan",
-  "installment",
+const CASH_ATM_KEYWORDS = [
+  "atm",
+  "cash withdrawal",
+  "cash withdraw",
+  "cash out",
+  "nakit",
+  "cekim",
+  "withdrawal",
+  "para cekme",
 ];
 
-const EDUCATION_KEYWORDS = [
-  "school",
-  "college",
-  "university",
-  "kurs",
-  "course",
-  "book",
-  "kitap",
-  "udemy",
-  "coursera",
-  "education",
-  "egitim",
+const TRANSFER_KEYWORDS = [
+  "transfer",
+  "eft",
+  "havale",
+  "wire",
+  "swift",
+  "iban",
+  "wise",
+  "remit",
+  "remittance",
+  "western union",
+  "money transfer",
+];
+
+const SALARY_KEYWORDS = [
+  "salary",
+  "payroll",
+  "wage",
+  "maas",
+  "stipend",
+  "scholarship",
+  "bursary",
+  "student finance",
+  "salary payment",
+];
+
+const BUSINESS_KEYWORDS = [
+  "invoice",
+  "client",
+  "freelance",
+  "commission",
+  "merchant payout",
+  "settlement",
+  "revenue",
+  "sales proceeds",
+  "stripe",
+  "paypal",
+  "payoneer",
+  "upwork",
+  "fiverr",
+  "business",
+];
+
+const SAVINGS_INVESTMENT_KEYWORDS = [
+  "savings",
+  "interest",
+  "dividend",
+  "investment",
+  "broker",
+  "brokerage",
+  "stock",
+  "fund",
+  "bond",
+  "mutual",
+  "deposit interest",
+  "vadeli",
+  "portfolio",
+];
+
+const REFUND_KEYWORDS = [
+  "refund",
+  "refunded",
+  "reversal",
+  "chargeback",
+  "cashback",
+  "cash back",
+  "iade",
+  "reimbursement",
 ];
 
 const TRANSACTION_SIGNAL_KEYWORDS = [
@@ -116,6 +287,8 @@ const TRANSACTION_SIGNAL_KEYWORDS = [
   "deposit",
   "deposited",
   "direct deposit",
+  "incoming transfer",
+  "interest",
   "money received",
   "order total",
   "paid",
@@ -128,7 +301,12 @@ const TRANSACTION_SIGNAL_KEYWORDS = [
   "statement credit",
   "transaction",
   "transfer",
+  "salary",
+  "payroll",
+  "scholarship",
+  "cashback",
   "withdrawal",
+  "atm",
   "yatirildi",
   "harcama",
   "kart",
@@ -234,6 +412,7 @@ function detectKind(text: string): TransactionKind {
     "credited",
     "deposited",
     "transfer received",
+    "incoming transfer",
     "refund",
     "iade",
     "girisi",
@@ -241,6 +420,16 @@ function detectKind(text: string): TransactionKind {
     "payment received",
     "direct deposit",
     "statement credit",
+    "salary",
+    "payroll",
+    "wage",
+    "maas",
+    "stipend",
+    "scholarship",
+    "interest",
+    "dividend",
+    "cashback",
+    "reimbursement",
   ];
   const expenseSignals = [
     "harcama",
@@ -258,6 +447,13 @@ function detectKind(text: string): TransactionKind {
     "charged",
     "debited",
     "withdrawal",
+    "cash withdrawal",
+    "transfer sent",
+    "outgoing transfer",
+    "rent",
+    "bill",
+    "loan payment",
+    "atm",
   ];
 
   if (incomeSignals.some((signal) => normalized.includes(signal))) {
@@ -271,28 +467,80 @@ function detectKind(text: string): TransactionKind {
   return "expense";
 }
 
-function detectCategory(merchant: string, text: string): Category {
+function detectCategory(merchant: string, text: string, kind: TransactionKind): Category {
   const normalized = normalizeText(`${merchant} ${text}`);
   const hasAny = (keywords: string[]) => keywords.some((keyword) => normalized.includes(keyword));
 
-  if (hasAny(SUPERMARKET_KEYWORDS)) {
-    return "Supermarket";
+  if (kind === "income") {
+    if (hasAny(REFUND_KEYWORDS)) {
+      return "Refunds";
+    }
+
+    if (hasAny(SALARY_KEYWORDS)) {
+      return "Salary";
+    }
+
+    if (hasAny(BUSINESS_KEYWORDS)) {
+      return "Business";
+    }
+
+    if (hasAny(SAVINGS_INVESTMENT_KEYWORDS)) {
+      return "Savings & Investment";
+    }
+
+    if (hasAny(TRANSFER_KEYWORDS)) {
+      return "Transfers";
+    }
+
+    return "Other";
+  }
+
+  if (hasAny(CASH_ATM_KEYWORDS)) {
+    return "Cash & ATM";
+  }
+
+  if (hasAny(SAVINGS_INVESTMENT_KEYWORDS)) {
+    return "Savings & Investment";
+  }
+
+  if (hasAny(HOUSING_KEYWORDS)) {
+    return "Housing";
+  }
+
+  if (hasAny(BILLS_KEYWORDS)) {
+    return "Bills & Utilities";
+  }
+
+  if (hasAny(GROCERIES_KEYWORDS)) {
+    return "Groceries";
+  }
+
+  if (hasAny(DINING_KEYWORDS)) {
+    return "Dining";
   }
 
   if (hasAny(TRANSPORT_KEYWORDS)) {
     return "Transport";
   }
 
-  if (hasAny(ENTERTAINMENT_KEYWORDS)) {
-    return "Entertainment";
-  }
-
-  if (hasAny(BILLS_KEYWORDS)) {
-    return "Bills";
+  if (hasAny(HEALTH_KEYWORDS)) {
+    return "Health";
   }
 
   if (hasAny(EDUCATION_KEYWORDS)) {
     return "Education";
+  }
+
+  if (hasAny(ENTERTAINMENT_KEYWORDS)) {
+    return "Entertainment";
+  }
+
+  if (hasAny(SHOPPING_KEYWORDS)) {
+    return "Shopping";
+  }
+
+  if (hasAny(TRANSFER_KEYWORDS)) {
+    return "Transfers";
   }
 
   return "Other";
@@ -349,7 +597,7 @@ export function parseBankMessageTransaction(rawMessage: string, source: Extract<
 
   const merchant = extractMerchant(text);
   const kind = detectKind(text);
-  const category = detectCategory(merchant, text);
+  const category = detectCategory(merchant, text, kind);
 
   return {
     id: crypto.randomUUID(),
@@ -480,21 +728,72 @@ export function convertTransactionAmount(
 
 export function normalizeCategory(category: string): Category {
   const target = category.trim().toLowerCase();
-  if (target.includes("super") || target.includes("market")) {
-    return "Supermarket";
+  if (target.includes("grocery") || target.includes("supermarket") || target === "supermarket" || target.includes("market")) {
+    return "Groceries";
   }
-  if (target.includes("transport") || target.includes("taxi") || target.includes("ride")) {
+
+  if (target.includes("dining") || target.includes("restaurant") || target.includes("cafe") || target.includes("coffee") || target.includes("food")) {
+    return "Dining";
+  }
+
+  if (target.includes("transport") || target.includes("taxi") || target.includes("ride") || target.includes("fuel")) {
     return "Transport";
   }
-  if (target.includes("entertain") || target.includes("leisure") || target.includes("food")) {
-    return "Entertainment";
+
+  if (target.includes("shop") || target.includes("retail") || target.includes("store") || target.includes("ecommerce")) {
+    return "Shopping";
   }
-  if (target.includes("bill") || target.includes("debt") || target.includes("loan")) {
-    return "Bills";
+
+  if (target.includes("bill") || target.includes("utility") || target.includes("debt") || target.includes("loan") || target.includes("credit card")) {
+    return "Bills & Utilities";
   }
-  if (target.includes("educ") || target.includes("school") || target.includes("course")) {
+
+  if (target.includes("housing") || target.includes("rent") || target.includes("mortgage") || target.includes("home")) {
+    return "Housing";
+  }
+
+  if (target.includes("health") || target.includes("medical") || target.includes("doctor") || target.includes("pharmacy")) {
+    return "Health";
+  }
+
+  if (target.includes("educ") || target.includes("school") || target.includes("course") || target.includes("tuition")) {
     return "Education";
   }
+
+  if (target.includes("entertain") || target.includes("leisure") || target.includes("stream") || target.includes("game")) {
+    return "Entertainment";
+  }
+
+  if (target.includes("cash") || target.includes("atm") || target.includes("withdraw")) {
+    return "Cash & ATM";
+  }
+
+  if (target.includes("transfer") || target.includes("wire") || target.includes("eft") || target.includes("remit")) {
+    return "Transfers";
+  }
+
+  if (target.includes("salary") || target.includes("payroll") || target.includes("wage") || target.includes("scholarship") || target.includes("stipend")) {
+    return "Salary";
+  }
+
+  if (target.includes("business") || target.includes("freelance") || target.includes("invoice") || target.includes("commission") || target.includes("payout")) {
+    return "Business";
+  }
+
+  if (
+    target.includes("saving") ||
+    target.includes("investment") ||
+    target.includes("interest") ||
+    target.includes("dividend") ||
+    target.includes("broker")
+  ) {
+    return "Savings & Investment";
+  }
+
+  if (target.includes("refund") || target.includes("cashback") || target.includes("reversal") || target.includes("reimbursement")) {
+    return "Refunds";
+  }
+
   return "Other";
 }
 
@@ -527,7 +826,10 @@ export function computeSummary(
     .filter(
       (transaction) =>
         (transaction.kind === "expense" && /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.merchant)) ||
-        (transaction.category === "Bills" && /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.rawSms ?? transaction.merchant)),
+        (
+          transaction.category === "Bills & Utilities" &&
+          /debt|loan|credit card|kredi kart|installment|taksit/i.test(transaction.rawSms ?? transaction.merchant)
+        ),
     )
     .reduce((sum, transaction) => sum + convertTransactionAmount(transaction, normalizedCurrency, exchangeRates), 0);
 
@@ -729,7 +1031,8 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
   const categoryBreakdown = buildCategoryBreakdown(transactions, summary.currency, exchangeRates);
   const topCategory = categoryBreakdown[0];
   const entertainment = categoryBreakdown.find((entry) => entry.category === "Entertainment");
-  const supermarket = categoryBreakdown.find((entry) => entry.category === "Supermarket");
+  const groceries = categoryBreakdown.find((entry) => entry.category === "Groceries");
+  const dining = categoryBreakdown.find((entry) => entry.category === "Dining");
 
   const cards: AdviceCard[] = [];
 
@@ -753,11 +1056,17 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
       title: "Entertainment is eating budget",
       description: `Entertainment uses ${formatPercent(entertainment.share)} of spending. Cap it with a weekly limit inside your app.`,
     });
-  } else if (supermarket && supermarket.share >= 30) {
+  } else if (dining && dining.share >= 18) {
+    cards.push({
+      type: "warning",
+      title: "Dining spend is creeping up",
+      description: `Dining takes ${formatPercent(dining.share)} of spending. Set a weekly food-out budget before it drifts further.`,
+    });
+  } else if (groceries && groceries.share >= 30) {
     cards.push({
       type: "warning",
       title: "Groceries deserve a cap",
-      description: `Supermarket purchases account for ${formatPercent(supermarket.share)}. Plan a fixed weekly basket before shopping.`,
+      description: `Groceries account for ${formatPercent(groceries.share)} of spending. Plan a fixed weekly basket before shopping.`,
     });
   } else if (topCategory) {
     cards.push({
@@ -777,7 +1086,7 @@ export function buildAdvice(summary: FinancialSummary, transactions: Transaction
     cards.push({
       type: "error",
       title: "Close the gap before it grows",
-      description: `Spending exceeded income by ${formatMoney(Math.abs(summary.cashFlow), summary.currency)}. Cut one bill or entertainment expense this week.`,
+      description: `Spending exceeded income by ${formatMoney(Math.abs(summary.cashFlow), summary.currency)}. Cut one bill, dining, or entertainment expense this week.`,
     });
   }
 

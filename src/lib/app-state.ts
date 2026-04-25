@@ -1,5 +1,6 @@
 import type { CurrencyCode, EmailScannerConfig, ScreenKey, Transaction, SmartSavePlusState } from "../types";
 import { normalizeCurrencyCode } from "./exchange-rates";
+import { normalizeCategory } from "./finance";
 
 const DEVICE_STATE_KEY = "smartbudget-device-state-v2";
 
@@ -184,15 +185,7 @@ function normalizeTransaction(value: unknown): Transaction | null {
   }
 
   const currency = normalizeCurrencyCode(typeof parsed.currency === "string" ? parsed.currency : "TRY", "TRY");
-  const category =
-    parsed.category === "Supermarket" ||
-    parsed.category === "Transport" ||
-    parsed.category === "Entertainment" ||
-    parsed.category === "Bills" ||
-    parsed.category === "Education" ||
-    parsed.category === "Other"
-      ? parsed.category
-      : "Other";
+  const category = typeof parsed.category === "string" ? normalizeCategory(parsed.category) : "Other";
   const kind = parsed.kind === "income" || parsed.kind === "expense" ? parsed.kind : "expense";
   const source = parsed.source === "sms" || parsed.source === "email" ? parsed.source : "manual";
 

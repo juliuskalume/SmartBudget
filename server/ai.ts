@@ -1,5 +1,5 @@
 import Groq from "groq-sdk";
-import type { AdviceCard, FinancialSummary, InvestmentHorizon, MarketAssetSnapshot } from "../src/types.js";
+import { CATEGORY_VALUES, type AdviceCard, type FinancialSummary, type InvestmentHorizon, type MarketAssetSnapshot } from "../src/types.js";
 
 const groqApiKey = process.env.GROQ_API_KEY?.trim();
 const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;
@@ -65,7 +65,7 @@ export async function categorizeSmsText(smsText: string) {
         {
           role: "system",
           content:
-            "You are a financial assistant. Decide if a bank-related SMS or email is a real financial transaction alert or receipt. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (Supermarket, Transport, Entertainment, Bills, Education, Other), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). If it is not a transaction alert or receipt, return isTransaction=false. Return ONLY JSON.",
+            `You are a financial assistant. Decide if a bank-related SMS or email is a real financial transaction alert or receipt. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (${CATEGORY_VALUES.join(", ")}), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). Use the most specific matching category and use Other only when none of the listed categories fit clearly. If it is not a transaction alert or receipt, return isTransaction=false. Return ONLY JSON.`,
         },
         {
           role: "user",

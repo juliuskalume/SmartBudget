@@ -1,13 +1,51 @@
 export type CurrencyCode = string;
 export type StableCurrencyCode = CurrencyCode;
 
-export type Category =
-  | "Supermarket"
-  | "Transport"
-  | "Entertainment"
-  | "Bills"
-  | "Education"
-  | "Other";
+export const CATEGORY_VALUES = [
+  "Groceries",
+  "Dining",
+  "Transport",
+  "Shopping",
+  "Bills & Utilities",
+  "Housing",
+  "Health",
+  "Education",
+  "Entertainment",
+  "Cash & ATM",
+  "Transfers",
+  "Salary",
+  "Business",
+  "Savings & Investment",
+  "Refunds",
+  "Other",
+] as const;
+
+export type Category = (typeof CATEGORY_VALUES)[number];
+
+export const EXPENSE_CATEGORY_VALUES = [
+  "Groceries",
+  "Dining",
+  "Transport",
+  "Shopping",
+  "Bills & Utilities",
+  "Housing",
+  "Health",
+  "Education",
+  "Entertainment",
+  "Cash & ATM",
+  "Transfers",
+  "Savings & Investment",
+  "Other",
+] as const satisfies readonly Category[];
+
+export const INCOME_CATEGORY_VALUES = [
+  "Salary",
+  "Business",
+  "Transfers",
+  "Refunds",
+  "Savings & Investment",
+  "Other",
+] as const satisfies readonly Category[];
 
 export type TransactionKind = "income" | "expense";
 export type TransactionSource = "sms" | "email" | "manual";

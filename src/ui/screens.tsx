@@ -52,25 +52,27 @@ import {
 import { getCountryOptions, getCurrencyChoices } from "../lib/countries";
 import { getBanksForCountry, getBankById } from "../lib/banks";
 import { buyCurrency, sellCurrency, getProtectedHoldingsByCurrency, getTotalByCurrency } from "../lib/smart-save-plus";
-import type {
-  AdviceCard,
-  BalancePurchasingPowerShift,
-  Category,
-  CurrencyCode,
-  EmailScannerConfig,
-  ExchangeRateSnapshot,
-  FinancialSummary,
-  InvestmentRecommendations,
-  SmartSavePlusState,
-  Bank,
-  ProtectedCurrencyHolding,
-  MarketInsights,
-  ManualTransactionDraft,
-  ScreenKey,
-  Transaction,
-  WhatIfAssetPerformance,
-  WhatIfPeriod,
-  WhatIfScenario,
+import {
+  EXPENSE_CATEGORY_VALUES,
+  INCOME_CATEGORY_VALUES,
+  type AdviceCard,
+  type BalancePurchasingPowerShift,
+  type Category,
+  type CurrencyCode,
+  type EmailScannerConfig,
+  type ExchangeRateSnapshot,
+  type FinancialSummary,
+  type InvestmentRecommendations,
+  type SmartSavePlusState,
+  type Bank,
+  type ProtectedCurrencyHolding,
+  type MarketInsights,
+  type ManualTransactionDraft,
+  type ScreenKey,
+  type Transaction,
+  type WhatIfAssetPerformance,
+  type WhatIfPeriod,
+  type WhatIfScenario,
 } from "../types";
 import { Badge, ChartFrame, EmptyState, HealthDial, MetricCard, Panel } from "./shared";
 
@@ -101,15 +103,25 @@ const chartAxisProps = {
 };
 
 const categoryIconMap = {
-  Supermarket: UtensilsCrossed,
+  Groceries: UtensilsCrossed,
+  Dining: UtensilsCrossed,
   Transport: BusFront,
-  Entertainment: Clapperboard,
-  Bills: Receipt,
+  Shopping: ShoppingBag,
+  "Bills & Utilities": Receipt,
+  Housing: House,
+  Health: HeartPulse,
   Education: GraduationCap,
+  Entertainment: Clapperboard,
+  "Cash & ATM": Wallet,
+  Transfers: ArrowRightLeft,
+  Salary: CircleDollarSign,
+  Business: BadgeDollarSign,
+  "Savings & Investment": PiggyBank,
+  Refunds: ArrowDownRight,
   Other: ShoppingBag,
 } as const;
 
-const transactionCategories: Category[] = ["Supermarket", "Transport", "Entertainment", "Bills", "Education", "Other"];
+const transactionCategories: Category[] = Array.from(new Set<Category>([...EXPENSE_CATEGORY_VALUES, ...INCOME_CATEGORY_VALUES]));
 
 const EMAIL_APP_PASSWORD_LINKS = {
   gmail: "https://myaccount.google.com/apppasswords",
@@ -118,30 +130,63 @@ const EMAIL_APP_PASSWORD_LINKS = {
   icloud: "https://support.apple.com/en-us/102654",
 } as const;
 
-const transactionCategoryTiles = [
-  { id: "food", label: "Food", category: "Supermarket" as const, icon: UtensilsCrossed },
+const expenseTransactionCategoryTiles = [
+  { id: "groceries", label: "Groceries", category: "Groceries" as const, icon: UtensilsCrossed },
+  { id: "dining", label: "Dining", category: "Dining" as const, icon: UtensilsCrossed },
   { id: "transport", label: "Transport", category: "Transport" as const, icon: BusFront },
-  { id: "shopping", label: "Shopping", category: "Other" as const, icon: ShoppingBag },
-  { id: "bills", label: "Bills", category: "Bills" as const, icon: Receipt },
-  { id: "entertainment", label: "Entertainment", category: "Entertainment" as const, icon: Clapperboard },
-  { id: "health", label: "Health", category: "Other" as const, icon: HeartPulse },
-  { id: "home", label: "Home", category: "Bills" as const, icon: House },
+  { id: "shopping", label: "Shopping", category: "Shopping" as const, icon: ShoppingBag },
+  { id: "bills", label: "Bills", category: "Bills & Utilities" as const, icon: Receipt },
+  { id: "housing", label: "Housing", category: "Housing" as const, icon: House },
+  { id: "health", label: "Health", category: "Health" as const, icon: HeartPulse },
   { id: "education", label: "Education", category: "Education" as const, icon: GraduationCap },
-];
+  { id: "entertainment", label: "Fun", category: "Entertainment" as const, icon: Clapperboard },
+  { id: "cash", label: "Cash / ATM", category: "Cash & ATM" as const, icon: Wallet },
+  { id: "transfer", label: "Transfer", category: "Transfers" as const, icon: ArrowRightLeft },
+  { id: "savings", label: "Savings", category: "Savings & Investment" as const, icon: PiggyBank },
+] as const;
+
+const incomeTransactionCategoryTiles = [
+  { id: "salary", label: "Salary", category: "Salary" as const, icon: CircleDollarSign },
+  { id: "business", label: "Business", category: "Business" as const, icon: BadgeDollarSign },
+  { id: "transfer-in", label: "Transfer", category: "Transfers" as const, icon: ArrowRightLeft },
+  { id: "refund", label: "Refund", category: "Refunds" as const, icon: ArrowDownRight },
+  { id: "savings-income", label: "Savings", category: "Savings & Investment" as const, icon: PiggyBank },
+  { id: "other-income", label: "Other", category: "Other" as const, icon: ShoppingBag },
+] as const;
 
 function createManualDraft(localCurrency: CurrencyCode, kind: Transaction["kind"] = "expense"): ManualTransactionDraft {
   return {
     merchant: "",
     amount: 0,
     currency: localCurrency,
-    category: kind === "income" ? "Other" : "Supermarket",
+    category: getDefaultCategoryForKind(kind),
     kind,
     date: new Date().toISOString().slice(0, 10),
   };
 }
 
-function getManualTileIdForCategory(category: Category) {
-  return transactionCategoryTiles.find((tile) => tile.category === category)?.id ?? transactionCategoryTiles[0].id;
+function getManualCategoryTiles(kind: Transaction["kind"]) {
+  return kind === "income" ? incomeTransactionCategoryTiles : expenseTransactionCategoryTiles;
+}
+
+function getDefaultCategoryForKind(kind: Transaction["kind"]): Category {
+  return kind === "income" ? "Salary" : "Groceries";
+}
+
+function getManualTileIdForCategory(category: Category, kind: Transaction["kind"]) {
+  const tiles = getManualCategoryTiles(kind);
+  return tiles.find((tile) => tile.category === category)?.id ?? tiles[0].id;
+}
+
+function normalizeManualDraftForKind(draft: ManualTransactionDraft, kind: Transaction["kind"]) {
+  const tiles = getManualCategoryTiles(kind);
+  const nextCategory = tiles.some((tile) => tile.category === draft.category) ? draft.category : getDefaultCategoryForKind(kind);
+
+  return {
+    ...draft,
+    kind,
+    category: nextCategory,
+  };
 }
 
 function formatTransactionSourceLabel(source: Transaction["source"]) {
@@ -462,15 +507,28 @@ export function TransactionsScreen({
   const [sourceFilter, setSourceFilter] = useState<Transaction["source"] | "all">("all");
   const currencyChoices = getCurrencyChoices(displayCurrency);
   const [manualDraft, setManualDraft] = useState<ManualTransactionDraft>(() => createManualDraft(displayCurrency));
-  const [selectedManualTileId, setSelectedManualTileId] = useState(() => getManualTileIdForCategory(createManualDraft(displayCurrency).category));
+  const [selectedManualTileId, setSelectedManualTileId] = useState(() =>
+    getManualTileIdForCategory(createManualDraft(displayCurrency).category, createManualDraft(displayCurrency).kind),
+  );
   const [editingMerchantId, setEditingMerchantId] = useState<string | null>(null);
   const [merchantDraft, setMerchantDraft] = useState("");
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const manualAmountDisplay = manualDraft.amount > 0 ? formatMoney(manualDraft.amount, manualDraft.currency) : formatMoney(0, manualDraft.currency);
+  const manualCategoryTiles = getManualCategoryTiles(manualDraft.kind);
 
   useEffect(() => {
-    setManualDraft((current) => (current.amount > 0 || current.merchant.trim() ? current : createManualDraft(displayCurrency, current.kind)));
+    setManualDraft((current) => {
+      if (current.amount > 0 || current.merchant.trim()) {
+        return current;
+      }
+
+      return createManualDraft(displayCurrency, current.kind);
+    });
   }, [displayCurrency]);
+
+  useEffect(() => {
+    setSelectedManualTileId(getManualTileIdForCategory(manualDraft.category, manualDraft.kind));
+  }, [manualDraft.category, manualDraft.kind]);
 
   function startMerchantEdit(transaction: Transaction) {
     setEditingCategoryId(null);
@@ -567,14 +625,14 @@ export function TransactionsScreen({
           <button
             className={`segment-switch__button ${manualDraft.kind === "expense" ? "segment-switch__button--active" : ""}`}
             type="button"
-            onClick={() => setManualDraft((current) => ({ ...current, kind: "expense" }))}
+            onClick={() => setManualDraft((current) => normalizeManualDraftForKind(current, "expense"))}
           >
             Debit
           </button>
           <button
             className={`segment-switch__button ${manualDraft.kind === "income" ? "segment-switch__button--active" : ""}`}
             type="button"
-            onClick={() => setManualDraft((current) => ({ ...current, kind: "income" }))}
+            onClick={() => setManualDraft((current) => normalizeManualDraftForKind(current, "income"))}
           >
             Credit
           </button>
@@ -586,7 +644,7 @@ export function TransactionsScreen({
         </div>
 
         <div className="category-tile-grid">
-          {transactionCategoryTiles.map((tile) => {
+          {manualCategoryTiles.map((tile) => {
             const Icon = tile.icon;
             const active = selectedManualTileId === tile.id;
 
@@ -617,7 +675,7 @@ export function TransactionsScreen({
               type="text"
               value={manualDraft.merchant}
               onChange={(event) => setManualDraft((current) => ({ ...current, merchant: event.target.value }))}
-              placeholder={manualDraft.kind === "income" ? "Scholarship, salary, refund..." : "Cash spend, kiosk, bus fare..."}
+              placeholder={manualDraft.kind === "income" ? "Salary, client payout, refund..." : "Groceries, rent, ATM cash, taxi..."}
             />
           </label>
 
@@ -679,7 +737,9 @@ export function TransactionsScreen({
               const saved = onAddManualTransaction(manualDraft);
               if (saved) {
                 setManualDraft(createManualDraft(displayCurrency, manualDraft.kind));
-                setSelectedManualTileId(getManualTileIdForCategory(createManualDraft(displayCurrency, manualDraft.kind).category));
+                setSelectedManualTileId(
+                  getManualTileIdForCategory(createManualDraft(displayCurrency, manualDraft.kind).category, manualDraft.kind),
+                );
               }
             }}
           >
