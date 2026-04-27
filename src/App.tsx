@@ -695,13 +695,7 @@ function App() {
 
       if (inboxScan.messages.length === 0) {
         if (isIncrementalInboxScan) {
-          const foundNewerNonFinancialSms = inboxScan.scannedThroughDate > previousSmsInboxCursorDate;
-          flashMessage(
-            foundNewerNonFinancialSms ? "warning" : "neutral",
-            foundNewerNonFinancialSms
-              ? "SmartBudget checked newer SMS, but none of them looked like bank transaction alerts."
-              : "No newer SMS were found since the last inbox sync.",
-          );
+          flashMessage("neutral", "No newer SMS were found since the last inbox sync.");
           return;
         }
 
@@ -729,16 +723,16 @@ function App() {
         flashMessage(
           "neutral",
           isIncrementalInboxScan
-            ? "Newer bank messages were already in your ledger."
+            ? "No newer SMS were found since the last inbox sync."
             : "Automatic SMS sync is enabled. Existing bank messages were already in your ledger.",
         );
         return;
       }
 
       flashMessage(
-        "warning",
+        isIncrementalInboxScan ? "neutral" : "warning",
         isIncrementalInboxScan
-          ? "SmartBudget checked newer inbox messages, but none of them looked like real bank transactions."
+          ? "No newer SMS were found since the last inbox sync."
           : "Automatic SMS sync is enabled, but no bank transaction messages were detected yet.",
       );
     } catch (error) {
