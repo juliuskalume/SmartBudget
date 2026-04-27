@@ -8,8 +8,14 @@ export interface AndroidSmsInboxMessage {
   read: boolean;
 }
 
+export interface AndroidSmsInboxImportResult {
+  messages: AndroidSmsInboxMessage[];
+  incremental: boolean;
+  scannedThroughDate: number;
+}
+
 interface SmartBudgetSmsPlugin {
-  importInbox(options?: { limit?: number }): Promise<{ messages: AndroidSmsInboxMessage[] }>;
+  importInbox(options?: { limit?: number; afterDate?: number }): Promise<AndroidSmsInboxImportResult>;
   consumePending(): Promise<{ messages: AndroidSmsInboxMessage[] }>;
   addListener(
     eventName: "smsReceived",
@@ -39,13 +45,23 @@ export function isAndroidNativePlatform() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android";
 }
 
-export async function importAndroidSmsMessages(limit = 60) {
+export async function importAndroidSmsMessages(options: { limit?: number; afterDate?: number } = {}) {
   if (!isAndroidNativePlatform()) {
-    return [];
+    return {
+      messages: [],
+      incremental: false,
+      scannedThroughDate: 0,
+    };
   }
 
-  const result = await SmartBudgetSms.importInbox({ limit });
-  return Array.isArray(result?.messages) ? result.messages : [];
+  const result = await SmartBudgetSms.importInbox(options);
+  const scannedThroughDate = Number(result?.scannedThroughDate);
+
+  return {
+    messages: Array.isArray(result?.messages) ? result.messages : [],
+    incremental: Boolean(result?.incremental),
+    scannedThroughDate: Number.isFinite(scannedThroughDate) && scannedThroughDate > 0 ? Math.floor(scannedThroughDate) : 0,
+  };
 }
 
 export async function consumePendingAndroidSmsMessages() {

@@ -438,7 +438,7 @@ export function DashboardScreen({
           title="Automatic SMS Sync"
           subtitle={
             isAndroidNative
-              ? "Incoming bank SMS are classified automatically on Android."
+              ? "Incoming bank SMS are classified automatically on Android, and manual inbox checks only look for newer messages."
               : "Automatic bank-message detection runs in the Android app and syncs into this account."
           }
         >
@@ -451,7 +451,7 @@ export function DashboardScreen({
                 <strong>{isAndroidNative ? "Live bank-message monitoring is active" : "Automatic detection lives on Android"}</strong>
                 <p>
                   {isAndroidNative
-                    ? "New transaction alerts are checked as they arrive. Cash spending can be added manually from the transaction screen."
+                    ? "New transaction alerts are checked as they arrive. Manual inbox checks only pull newer messages after the first sync, and cash spending can still be added manually."
                     : "Transactions detected in the Android app appear here once they sync to the same account."}
                 </p>
               </div>
@@ -460,7 +460,7 @@ export function DashboardScreen({
               {isAndroidNative ? (
                 <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
                   <ScanText size={16} />
-                  {isImportingNativeSms ? "Scanning..." : "Scan existing inbox"}
+                  {isImportingNativeSms ? "Scanning..." : "Check newer inbox messages"}
                 </button>
               ) : null}
               <button className="button button--ghost" type="button" onClick={() => onSetScreen("transactions")}>
@@ -633,7 +633,7 @@ export function TransactionsScreen({
         title="Automatic SMS Sync"
         subtitle={
           isAndroidNative
-            ? "SmartBudget listens for new bank SMS messages and classifies them in the background."
+            ? "SmartBudget listens for new bank SMS messages and classifies them in the background. Manual inbox checks only fetch newer device messages after the first sync."
             : "Automatic bank-message detection happens in the Android app and synced transactions show here."
         }
         className="composer-panel"
@@ -646,7 +646,7 @@ export function TransactionsScreen({
             <strong>{isAndroidNative ? "Incoming transaction alerts are checked automatically" : "Let the App do the hard work for you!"}</strong>
             <p>
               {isAndroidNative
-                ? "When a new bank or card message arrives, SmartBudget decides whether it is a debit or credit and updates the ledger if it is real transaction activity."
+                ? "When a new bank or card message arrives, SmartBudget decides whether it is a debit or credit and updates the ledger if it is real transaction activity. Manual inbox checks only catch up on newer messages."
                 : "Install and use the Android app to detect incoming bank SMS automatically, then review the synced ledger on the web."}
             </p>
           </div>
@@ -667,7 +667,7 @@ export function TransactionsScreen({
           {isAndroidNative ? (
             <button className="button button--secondary" type="button" onClick={onImportNativeSms} disabled={isImportingNativeSms}>
               <ScanText size={16} />
-              {isImportingNativeSms ? "Scanning..." : "Scan existing inbox"}
+              {isImportingNativeSms ? "Scanning..." : "Check newer inbox messages"}
             </button>
           ) : null}
         </div>

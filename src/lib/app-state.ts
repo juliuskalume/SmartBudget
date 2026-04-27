@@ -8,6 +8,7 @@ export const DEFAULT_SMART_SAVE_GOAL = 500;
 
 export type DeviceState = {
   smsAccess: boolean;
+  smsInboxCursorDate: number;
   activeScreen: ScreenKey;
   emailScanner: EmailScannerConfig;
 };
@@ -22,6 +23,7 @@ export type CloudState = {
 export function createDefaultDeviceState(): DeviceState {
   return {
     smsAccess: false,
+    smsInboxCursorDate: 0,
     activeScreen: "dashboard",
     emailScanner: createDefaultEmailScannerConfig(),
   };
@@ -67,6 +69,7 @@ export function loadDeviceState(): DeviceState {
     const parsed = JSON.parse(raw) as Partial<DeviceState>;
     return {
       smsAccess: Boolean(parsed.smsAccess),
+      smsInboxCursorDate: normalizeSmsInboxCursor(parsed.smsInboxCursorDate),
       activeScreen: isScreenKey(parsed.activeScreen) ? parsed.activeScreen : "dashboard",
       emailScanner: normalizeEmailScannerConfig(parsed.emailScanner),
     };
@@ -147,6 +150,15 @@ function normalizeEmailPollingInterval(value: unknown) {
   }
 
   return Math.max(2, Math.min(30, Math.round(parsed)));
+}
+
+function normalizeSmsInboxCursor(value: unknown) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 0;
+  }
+
+  return Math.floor(parsed);
 }
 
 export function isScreenKey(value: unknown): value is ScreenKey {

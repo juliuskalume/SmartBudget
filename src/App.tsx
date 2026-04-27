@@ -119,6 +119,7 @@ const SUPPORT_EMAIL = "sentira.official@gmail.com";
 const APP_SHARE_MESSAGE = "Hey, I use SmartBudget to auto track and manage my finances. You can try it too at https://hamid-smart-budget.vercel.app";
 const EMAIL_SCANNER_PASSWORD_KEY = "smartbudget-email-password-v1";
 const LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY = "smartbudget-email-session-password-v1";
+const SMS_INBOX_SCAN_LIMIT = 80;
 const AUTO_EMAIL_SCAN_LIMIT = 20;
 const MIN_AUTO_EMAIL_SYNC_GAP_MS = 60_000;
 
@@ -673,10 +674,16 @@ function App() {
       return;
     }
 
+    const previousSmsInboxCursorDate = deviceState.smsInboxCursorDate;
+    const isIncrementalInboxScan = deviceState.smsAccess && previousSmsInboxCursorDate > 0;
     setIsImportingNativeSms(true);
 
     try {
-      const inboxMessages = await importAndroidSmsMessages(80);
+      const inboxScan = await importAndroidSmsMessages({
+        limit: SMS_INBOX_SCAN_LIMIT,
+        afterDate: isIncrementalInboxScan ? previousSmsInboxCursorDate : undefined,
+      });
+      updateSmsInboxCursor(inboxScan.scannedThroughDate);
 
       setDeviceState((current) => ({
         ...current,
@@ -684,7 +691,23 @@ function App() {
         activeScreen: "dashboard",
       }));
 
-      const outcome = await ingestAndroidSmsMessages(inboxMessages, {
+      if (inboxScan.messages.length === 0) {
+        if (isIncrementalInboxScan) {
+          const foundNewerNonFinancialSms = inboxScan.scannedThroughDate > previousSmsInboxCursorDate;
+          flashMessage(
+            foundNewerNonFinancialSms ? "warning" : "neutral",
+            foundNewerNonFinancialSms
+              ? "SmartBudget checked newer SMS, but none of them looked like bank transaction alerts."
+              : "No newer SMS were found since the last inbox sync.",
+          );
+          return;
+        }
+
+        flashMessage("warning", "Automatic SMS sync is enabled, but no bank transaction messages were detected yet.");
+        return;
+      }
+
+      const outcome = await ingestAndroidSmsMessages(inboxScan.messages, {
         notifyOnImport: false,
         notifyWhenIgnored: false,
         notifyIfDuplicate: false,
@@ -693,17 +716,29 @@ function App() {
       if (outcome.addedCount > 0) {
         flashMessage(
           "success",
-          `Automatic SMS sync is enabled. Imported ${outcome.addedCount} transaction${outcome.addedCount === 1 ? "" : "s"} from existing bank messages.`,
+          isIncrementalInboxScan
+            ? `Checked newer inbox messages and imported ${outcome.addedCount} transaction${outcome.addedCount === 1 ? "" : "s"}.`
+            : `Automatic SMS sync is enabled. Imported ${outcome.addedCount} transaction${outcome.addedCount === 1 ? "" : "s"} from existing bank messages.`,
         );
         return;
       }
 
       if (outcome.duplicateCount > 0) {
-        flashMessage("neutral", "Automatic SMS sync is enabled. Existing bank messages were already in your ledger.");
+        flashMessage(
+          "neutral",
+          isIncrementalInboxScan
+            ? "Newer bank messages were already in your ledger."
+            : "Automatic SMS sync is enabled. Existing bank messages were already in your ledger.",
+        );
         return;
       }
 
-      flashMessage("warning", "Automatic SMS sync is enabled, but no bank transaction messages were detected yet.");
+      flashMessage(
+        "warning",
+        isIncrementalInboxScan
+          ? "SmartBudget checked newer inbox messages, but none of them looked like real bank transactions."
+          : "Automatic SMS sync is enabled, but no bank transaction messages were detected yet.",
+      );
     } catch (error) {
       flashMessage("error", error instanceof Error ? error.message : "Unable to enable automatic SMS sync on this device.");
     } finally {
@@ -736,6 +771,24 @@ function App() {
 
   function updateTargetCurrency(value: CurrencyCode) {
     setCloudState((current) => ({ ...current, targetCurrency: value }));
+  }
+
+  function updateSmsInboxCursor(value: number) {
+    const nextCursorDate = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    if (nextCursorDate <= 0) {
+      return;
+    }
+
+    setDeviceState((current) => {
+      if (current.smsInboxCursorDate >= nextCursorDate) {
+        return current;
+      }
+
+      return {
+        ...current,
+        smsInboxCursorDate: nextCursorDate,
+      };
+    });
   }
 
   function updateEmailScannerConfig(value: Partial<EmailScannerConfig>) {
@@ -1183,6 +1236,8 @@ function App() {
         duplicateCount: 0,
       };
     }
+
+    updateSmsInboxCursor(getLatestSmsMessageDate(messages));
 
     const existingRawSms = new Set(
       cloudState.transactions
@@ -1828,6 +1883,13 @@ function sanitizeAdviceCard(card: unknown): AdviceCard | null {
     title,
     description,
   };
+}
+
+function getLatestSmsMessageDate(messages: readonly AndroidSmsInboxMessage[]) {
+  return messages.reduce((latestDate, message) => {
+    const messageDate = Number(message.date);
+    return Number.isFinite(messageDate) && messageDate > latestDate ? Math.floor(messageDate) : latestDate;
+  }, 0);
 }
 
 function sanitizeEmailInboxMessage(value: unknown): EmailInboxMessage | null {

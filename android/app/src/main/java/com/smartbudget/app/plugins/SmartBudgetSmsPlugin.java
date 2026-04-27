@@ -72,10 +72,20 @@ public class SmartBudgetSmsPlugin extends Plugin {
     private void readInbox(PluginCall call) {
         int requestedLimit = call.getInt("limit", 60);
         int limit = Math.max(1, Math.min(requestedLimit, 200));
+        Long requestedAfterDate = call.getLong("afterDate");
+        long afterDate = requestedAfterDate == null ? 0L : Math.max(0L, requestedAfterDate);
+        boolean incremental = afterDate > 0L;
         Cursor cursor = null;
         JSArray messages = new JSArray();
+        long scannedThroughDate = afterDate;
 
         try {
+            String selection = incremental ? Telephony.Sms.DATE + " > ?" : null;
+            String[] selectionArgs = incremental ? new String[] { String.valueOf(afterDate) } : null;
+            String sortOrder = incremental
+                ? Telephony.Sms.DATE + " ASC"
+                : Telephony.Sms.DATE + " DESC";
+
             cursor = getContext()
                 .getContentResolver()
                 .query(
@@ -87,9 +97,9 @@ public class SmartBudgetSmsPlugin extends Plugin {
                         Telephony.Sms.DATE,
                         Telephony.Sms.READ
                     },
-                    null,
-                    null,
-                    Telephony.Sms.DATE + " DESC"
+                    selection,
+                    selectionArgs,
+                    sortOrder
                 );
 
             if (cursor != null) {
@@ -101,6 +111,8 @@ public class SmartBudgetSmsPlugin extends Plugin {
                 int count = 0;
 
                 while (cursor.moveToNext() && count < limit) {
+                    long messageDate = cursor.getLong(dateColumn);
+                    scannedThroughDate = Math.max(scannedThroughDate, messageDate);
                     String body = cursor.getString(bodyColumn);
                     if (!SmartBudgetSmsUtils.isLikelyFinancialSms(body)) {
                         continue;
@@ -110,7 +122,7 @@ public class SmartBudgetSmsPlugin extends Plugin {
                     sms.put("id", String.valueOf(cursor.getLong(idColumn)));
                     sms.put("address", addressColumn >= 0 ? cursor.getString(addressColumn) : "");
                     sms.put("body", body == null ? "" : body);
-                    sms.put("date", cursor.getLong(dateColumn));
+                    sms.put("date", messageDate);
                     sms.put("read", readColumn >= 0 && cursor.getInt(readColumn) == 1);
                     messages.put(sms);
                     count++;
@@ -119,6 +131,8 @@ public class SmartBudgetSmsPlugin extends Plugin {
 
             JSObject result = new JSObject();
             result.put("messages", messages);
+            result.put("incremental", incremental);
+            result.put("scannedThroughDate", scannedThroughDate);
             call.resolve(result);
         } catch (Exception e) {
             call.reject("Unable to read SMS inbox.", e);

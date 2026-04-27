@@ -235,7 +235,7 @@ export function PermissionScreen({
             </div>
             <div className="phone-message">
               <ScanText size={15} />
-              <p>Existing inbox messages are scanned once, then each new bank SMS is checked as it arrives for debit or credit activity.</p>
+              <p>The first inbox scan pulls recent history. After that, manual inbox checks only look for newer bank SMS while new alerts are checked as they arrive.</p>
             </div>
             <div className="phone-message">
               <ShieldCheck size={15} />
