@@ -11,6 +11,7 @@ import {
 } from "./lib/android-sms";
 import {
   DEFAULT_SMART_SAVE_GOAL,
+  MAX_DISMISSED_IMPORT_KEYS,
   createDefaultEmailScannerConfig,
   createDefaultCloudState,
   loadDeviceState,
@@ -580,6 +581,7 @@ function App() {
   function loadDemoData() {
     const demoCloudState: CloudState = {
       transactions: cloneDemoTransactions(),
+      dismissedImportKeys: [],
       smartSaveGoal: DEFAULT_SMART_SAVE_GOAL,
       targetCurrency: "USD",
       smartSavePlus: {
@@ -1244,6 +1246,7 @@ function App() {
         .map((transaction) => transaction.rawSms?.trim())
         .filter((value): value is string => Boolean(value)),
     );
+    const dismissedImportKeys = new Set(cloudState.dismissedImportKeys);
     const seenIncoming = new Set<string>();
     const candidates: AndroidSmsInboxMessage[] = [];
     let duplicateCount = 0;
@@ -1254,7 +1257,7 @@ function App() {
         continue;
       }
 
-      if (existingRawSms.has(rawSms) || seenIncoming.has(rawSms)) {
+      if (dismissedImportKeys.has(rawSms) || existingRawSms.has(rawSms) || seenIncoming.has(rawSms)) {
         duplicateCount += 1;
         continue;
       }
@@ -1269,7 +1272,7 @@ function App() {
 
     if (transactions.length > 0) {
       setCloudState((current) => {
-        const merged = mergeTransactions(current.transactions, transactions);
+        const merged = mergeTransactions(current.transactions, transactions, current.dismissedImportKeys);
         addedCount = merged.addedCount;
         if (merged.addedCount === 0) {
           return current;
@@ -1337,6 +1340,7 @@ function App() {
       };
     }
 
+    const dismissedImportKeys = new Set(cloudState.dismissedImportKeys);
     const seenIncoming = new Set<string>();
     const candidates: EmailInboxMessage[] = [];
     let duplicateCount = 0;
@@ -1347,8 +1351,8 @@ function App() {
         continue;
       }
 
-      const candidateKeys = [buildEmailMessageKey(message), rawEmail].filter((value): value is string => Boolean(value));
-      if (candidateKeys.some((key) => seenIncoming.has(key))) {
+      const candidateKeys = [buildEmailMessageKey(message), buildEmailPreview(rawEmail)].filter((value): value is string => Boolean(value));
+      if (candidateKeys.some((key) => dismissedImportKeys.has(key) || seenIncoming.has(key))) {
         duplicateCount += 1;
         continue;
       }
@@ -1363,7 +1367,7 @@ function App() {
 
     if (transactions.length > 0) {
       setCloudState((current) => {
-        const merged = mergeTransactions(current.transactions, transactions);
+        const merged = mergeTransactions(current.transactions, transactions, current.dismissedImportKeys);
         addedCount = merged.addedCount;
         if (merged.addedCount === 0) {
           return current;
@@ -1556,10 +1560,21 @@ function App() {
   }
 
   function deleteTransaction(id: string) {
-    setCloudState((current) => ({
-      ...current,
-      transactions: current.transactions.filter((transaction) => transaction.id !== id),
-    }));
+    setCloudState((current) => {
+      const transaction = current.transactions.find((entry) => entry.id === id);
+      if (!transaction) {
+        return current;
+      }
+
+      return {
+        ...current,
+        transactions: current.transactions.filter((entry) => entry.id !== id),
+        dismissedImportKeys:
+          transaction.source === "manual"
+            ? current.dismissedImportKeys
+            : mergeDismissedImportKeys(current.dismissedImportKeys, getTransactionDedupKeys(transaction)),
+      };
+    });
     setAiAdvice(null);
     flashMessage("neutral", "Transaction removed from the ledger.");
   }
@@ -2048,8 +2063,32 @@ function getTransactionDedupKeys(transaction: Pick<Transaction, "sourceMessageId
     .filter((value): value is string => Boolean(value));
 }
 
-function mergeTransactions(existing: Transaction[], incoming: Transaction[]) {
-  const seenImports = new Set(existing.flatMap((transaction) => getTransactionDedupKeys(transaction)));
+function mergeDismissedImportKeys(existing: readonly string[], incoming: readonly string[]) {
+  if (incoming.length === 0) {
+    return [...existing];
+  }
+
+  const seenKeys = new Set<string>();
+  const merged: string[] = [];
+
+  for (const key of [...incoming, ...existing]) {
+    const normalizedKey = key.trim();
+    if (!normalizedKey || seenKeys.has(normalizedKey)) {
+      continue;
+    }
+
+    seenKeys.add(normalizedKey);
+    merged.push(normalizedKey);
+    if (merged.length >= MAX_DISMISSED_IMPORT_KEYS) {
+      break;
+    }
+  }
+
+  return merged;
+}
+
+function mergeTransactions(existing: Transaction[], incoming: Transaction[], dismissedImportKeys: readonly string[] = []) {
+  const seenImports = new Set([...dismissedImportKeys, ...existing.flatMap((transaction) => getTransactionDedupKeys(transaction))]);
   const seenIds = new Set(existing.map((transaction) => transaction.id));
   const merged: Transaction[] = [];
 

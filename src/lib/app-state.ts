@@ -5,6 +5,7 @@ import { normalizeCategory } from "./finance";
 const DEVICE_STATE_KEY = "smartbudget-device-state-v2";
 
 export const DEFAULT_SMART_SAVE_GOAL = 500;
+export const MAX_DISMISSED_IMPORT_KEYS = 2000;
 
 export type DeviceState = {
   smsAccess: boolean;
@@ -15,6 +16,7 @@ export type DeviceState = {
 
 export type CloudState = {
   transactions: Transaction[];
+  dismissedImportKeys: string[];
   smartSaveGoal: number;
   targetCurrency: CurrencyCode;
   smartSavePlus: SmartSavePlusState;
@@ -45,6 +47,7 @@ export function createDefaultEmailScannerConfig(): EmailScannerConfig {
 export function createDefaultCloudState(): CloudState {
   return {
     transactions: [],
+    dismissedImportKeys: [],
     smartSaveGoal: DEFAULT_SMART_SAVE_GOAL,
     targetCurrency: "USD",
     smartSavePlus: {
@@ -102,6 +105,7 @@ export function normalizeCloudState(value: unknown): CloudState {
           .map((transaction) => normalizeTransaction(transaction))
           .filter((transaction): transaction is Transaction => transaction !== null)
       : [],
+    dismissedImportKeys: normalizeDismissedImportKeys(parsed.dismissedImportKeys),
     smartSaveGoal: typeof parsed.smartSaveGoal === "number" ? parsed.smartSaveGoal : DEFAULT_SMART_SAVE_GOAL,
     targetCurrency: normalizeCurrencyCode(typeof parsed.targetCurrency === "string" ? parsed.targetCurrency : "USD", "USD"),
     smartSavePlus: normalizeSmartSavePlusState(parsed.smartSavePlus),
@@ -159,6 +163,34 @@ function normalizeSmsInboxCursor(value: unknown) {
   }
 
   return Math.floor(parsed);
+}
+
+function normalizeDismissedImportKeys(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+
+    const key = entry.trim();
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(key);
+    if (normalized.length >= MAX_DISMISSED_IMPORT_KEYS) {
+      break;
+    }
+  }
+
+  return normalized;
 }
 
 export function isScreenKey(value: unknown): value is ScreenKey {
