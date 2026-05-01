@@ -222,16 +222,17 @@ function App() {
       }
 
       const nextAccount = buildSessionFromSupabase(nextSession);
-      isHydratingCloudRef.current = true;
-      skipNextCloudSaveRef.current = true;
       setSelectedCountryCode(nextAccount.countryCode);
       setSession(nextAccount);
 
       if (appliedCloudUserIdRef.current === nextSession.user.id) {
+        isHydratingCloudRef.current = false;
         setIsBootstrapping(false);
         return;
       }
 
+      isHydratingCloudRef.current = true;
+      skipNextCloudSaveRef.current = true;
       appliedCloudUserIdRef.current = nextSession.user.id;
       setIsBootstrapping(true);
       setCloudState(createDefaultCloudState());
@@ -318,7 +319,7 @@ function App() {
   }, [flash]);
 
   useEffect(() => {
-    if (!isAndroidNative || !deviceState.smsAccess || !session) {
+    if (!isAndroidNative || !deviceState.smsAccess || !session || (session.mode === "cloud" && isBootstrapping)) {
       return;
     }
 
@@ -359,7 +360,7 @@ function App() {
       document.removeEventListener("visibilitychange", handleForeground);
       void Promise.resolve(subscription).then((listener) => listener?.remove());
     };
-  }, [deviceState.smsAccess, isAndroidNative, session]);
+  }, [deviceState.smsAccess, isAndroidNative, isBootstrapping, session]);
 
   useEffect(() => {
     if (!session?.email) {
@@ -382,7 +383,7 @@ function App() {
   }, [session?.email]);
 
   useEffect(() => {
-    if (!session || !deviceState.emailScanner.autoSyncEnabled) {
+    if (!session || !deviceState.emailScanner.autoSyncEnabled || (session.mode === "cloud" && isBootstrapping)) {
       return;
     }
 
@@ -490,7 +491,7 @@ function App() {
       window.removeEventListener("focus", handleForeground);
       document.removeEventListener("visibilitychange", handleForeground);
     };
-  }, [deviceState.emailScanner, emailScannerPassword, session]);
+  }, [deviceState.emailScanner, emailScannerPassword, isBootstrapping, session]);
 
   const displayCurrency = session?.localCurrency ?? getCountryCurrency(selectedCountryCode);
 
