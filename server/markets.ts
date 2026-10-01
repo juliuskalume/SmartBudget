@@ -278,6 +278,12 @@ export async function buildMarketInsights(input: {
   }
 
   const amount = Number.isFinite(input.amount) && input.amount > 0 ? input.amount : 100;
+  const aiSelections = await generateInvestmentSelections({
+    amount,
+    summary: input.summary,
+    market: selectAiMarketCandidates(market, input.summary),
+  });
+
   const suggestions = buildRecommendationSuggestions({
     amount,
     market,
