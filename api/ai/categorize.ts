@@ -18,6 +18,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json(result);
   } catch (error) {
     console.error("AI categorize error:", error);
-    res.status(500).json({ error: "AI processing failed" });
+    // Let the client use its deterministic bank-message parser rather than
+    // treating an AI outage as a confident "not a transaction" result.
+    res.status(503).json({ error: "AI categorization is temporarily unavailable" });
   }
 }
