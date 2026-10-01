@@ -288,7 +288,10 @@ export async function buildMarketInsights(input: {
     amount,
     market,
     summary: input.summary,
-    aiSelections,
+    // What If is calculated from the live market snapshot. Keep this request
+    // deterministic so opening or rerunning a scenario never depends on a
+    // Groq JSON response.
+    aiSelections: [],
   });
 
   const whatIfByPeriod = {
@@ -305,7 +308,7 @@ export async function buildMarketInsights(input: {
     recommendations: {
       amount,
       generatedAt: new Date().toISOString(),
-      source: aiSelections.length > 0 ? "ai" : "deterministic",
+      source: "deterministic",
       suggestions,
       market,
       disclaimer:
