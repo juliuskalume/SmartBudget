@@ -27,6 +27,7 @@ const RECOMMENDATION_HORIZONS = [
   { horizon: "months", horizonLabel: "Next 3 months", period: "3m" },
   { horizon: "years", horizonLabel: "Next 1 year", period: "1y" },
 ] as const;
+const AI_MARKET_CANDIDATE_LIMIT = 18;
 
 const YAHOO_PRIMARY_ASSETS = [
   { symbol: "AAPL", name: "Apple", category: "Large Cap Equity" },
@@ -242,7 +243,7 @@ export async function buildInvestmentRecommendations(input: {
   const aiSelections = await generateInvestmentSelections({
     amount: normalizedAmount,
     summary: input.summary,
-    market,
+    market: selectAiMarketCandidates(market, input.summary),
   });
 
   const suggestions = buildRecommendationSuggestions({
@@ -277,17 +278,14 @@ export async function buildMarketInsights(input: {
   }
 
   const amount = Number.isFinite(input.amount) && input.amount > 0 ? input.amount : 100;
-  const aiSelections = await generateInvestmentSelections({
-    amount,
-    summary: input.summary,
-    market,
-  });
-
   const suggestions = buildRecommendationSuggestions({
     amount,
     market,
     summary: input.summary,
-    aiSelections,
+    // What If is calculated from the live market snapshot. Keep this request
+    // deterministic so opening or rerunning a scenario never depends on a
+    // Groq JSON response.
+    aiSelections: [],
   });
 
   const whatIfByPeriod = {
@@ -304,7 +302,7 @@ export async function buildMarketInsights(input: {
     recommendations: {
       amount,
       generatedAt: new Date().toISOString(),
-      source: aiSelections.length > 0 ? "ai" : "deterministic",
+      source: "deterministic",
       suggestions,
       market,
       disclaimer:
@@ -619,6 +617,23 @@ function pickFallbackAsset(
   summary: Pick<FinancialSummary, "healthScore" | "savingsRate" | "cashFlow" | "netWorth">,
 ) {
   return [...market].sort((left, right) => scoreAsset(right, period, summary) - scoreAsset(left, period, summary))[0];
+}
+
+function selectAiMarketCandidates(
+  market: MarketAssetSnapshot[],
+  summary: Pick<FinancialSummary, "healthScore" | "savingsRate" | "cashFlow" | "netWorth">,
+) {
+  const candidateSymbols = new Set<string>();
+
+  for (const period of ["1m", "3m", "1y"] as const) {
+    for (const asset of [...market]
+      .sort((left, right) => scoreAsset(right, period, summary) - scoreAsset(left, period, summary))
+      .slice(0, AI_MARKET_CANDIDATE_LIMIT)) {
+      candidateSymbols.add(asset.symbol);
+    }
+  }
+
+  return market.filter((asset) => candidateSymbols.has(asset.symbol));
 }
 
 function scoreAsset(
