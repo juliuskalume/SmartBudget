@@ -67,7 +67,7 @@ export async function categorizeSmsText(smsText: string) {
       {
         role: "system",
         content:
-          `Extract a bank transaction from the message. Return JSON only with isTransaction, merchant, amount, currency, category (${CATEGORY_VALUES.join(", ")}), and kind (income or expense). Use isTransaction=false if it is not a transaction.`,
+          `You are a financial assistant. Decide if a bank-related SMS or email is a real financial transaction alert or receipt. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (${CATEGORY_VALUES.join(", ")}), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). Use the most specific matching category and use Other only when none of the listed categories fit clearly. If it is not a transaction alert or receipt, return isTransaction=false. Return ONLY JSON.`,
       },
       {
         role: "user",
