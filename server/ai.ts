@@ -24,6 +24,20 @@ function safeParseJson(value: string) {
   }
 }
 
+function parseJsonObjectFromModel(value: string) {
+  const directResult = safeParseJson(value);
+  if (directResult && typeof directResult === "object") {
+    return directResult;
+  }
+
+  // Some models wrap an otherwise valid JSON response in a Markdown code fence
+  // when JSON mode is not available. Accept the object inside the response, but
+  // leave validation to the caller before any value is used.
+  const start = value.indexOf("{");
+  const end = value.lastIndexOf("}");
+  return start >= 0 && end > start ? safeParseJson(value.slice(start, end + 1)) : null;
+}
+
 type InvestmentSelection = {
   horizon: InvestmentHorizon;
   period: "1m" | "3m" | "1y";
@@ -146,7 +160,7 @@ export async function generateInvestmentSelections(input: InvestmentSelectionInp
         {
           role: "system",
           content:
-            "You are a portfolio suggestion engine inside a budgeting app. Choose one asset for each horizon: weeks with period 1m, months with period 3m, years with period 1y. Use ONLY the supplied market symbols. Prefer strong momentum while considering financial stability. Market rows are [symbol, 1m return %, 3m return %, 6m return %, 1y return %, annualized volatility %]. Return ONLY JSON: {suggestions:[{horizon,period,assetSymbol,rationale,confidence}]}. Keep each rationale under 20 words.",
+            "You are a portfolio suggestion engine inside a budgeting app. Choose one asset for each horizon: weeks with period 1m, months with period 3m, years with period 1y. Use ONLY the supplied market symbols. Prefer strong momentum while considering financial stability. Market rows are [symbol, 1m return %, 3m return %, 6m return %, 1y return %, annualized volatility %]. Reply with one JSON object and no Markdown: {\"suggestions\":[{\"horizon\":\"weeks\",\"period\":\"1m\",\"assetSymbol\":\"SYMBOL\",\"rationale\":\"brief reason\",\"confidence\":\"medium\"}]}. Include exactly three suggestions, one for each horizon. Keep each rationale under 20 words.",
         },
         {
           role: "user",
@@ -172,11 +186,14 @@ export async function generateInvestmentSelections(input: InvestmentSelectionInp
         },
       ],
       model: GROQ_MODEL,
-      response_format: { type: "json_object" },
+      // Do not enable Groq's legacy JSON mode here. Some configured models can
+      // reject a valid What If request with `json_validate_failed` while trying
+      // to validate their generated response. The validated parser below lets
+      // the market screen safely fall back to deterministic rankings instead.
       max_tokens: INVESTMENT_SELECTION_MAX_TOKENS,
     });
 
-    const result = safeParseJson(completion.choices[0].message.content || "{}");
+    const result = parseJsonObjectFromModel(completion.choices[0].message.content || "{}");
     const suggestions = Array.isArray(result) ? result : result?.suggestions || result?.recommendations || [];
 
     return Array.isArray(suggestions)
