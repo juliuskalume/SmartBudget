@@ -123,6 +123,7 @@ const LEGACY_EMAIL_SCANNER_SESSION_PASSWORD_KEY = "smartbudget-email-session-pas
 const SMS_INBOX_SCAN_LIMIT = 80;
 const AUTO_EMAIL_SCAN_LIMIT = 20;
 const MIN_AUTO_EMAIL_SYNC_GAP_MS = 60_000;
+const MAX_AI_CATEGORIZATION_CHARS = 750;
 
 function App() {
   useTouchHaptics();
@@ -1113,13 +1114,19 @@ function App() {
         }
       : null;
 
+    // A complete local parse is sufficient for ordinary bank alerts. Avoiding
+    // an AI request here keeps routine inbox and SMS imports token-free.
+    if (fallback && hasHighConfidenceLocalClassification(fallback)) {
+      return fallback;
+    }
+
     try {
       const response = await fetch("/api/ai/categorize", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ messageText: trimmedText, channel: source }),
+        body: JSON.stringify({ messageText: buildAiCategorizationText(trimmedText), channel: source }),
       });
 
       if (response.ok) {
@@ -1931,6 +1938,26 @@ function sanitizeEmailInboxMessage(value: unknown): EmailInboxMessage | null {
 
 function buildEmailImportText(message: Pick<EmailInboxMessage, "subject" | "from" | "text">) {
   return [message.subject.trim(), message.from.trim(), message.text.trim()].filter(Boolean).join("\n").trim().slice(0, 4000);
+}
+
+function hasHighConfidenceLocalClassification(classification: MessageClassification) {
+  return (
+    Number.isFinite(classification.amount) &&
+    classification.amount > 0 &&
+    classification.merchant.trim() !== "" &&
+    classification.merchant !== "Unknown Merchant"
+  );
+}
+
+function buildAiCategorizationText(rawText: string) {
+  const relevantLines = rawText
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .filter((line) => !/(?:unsubscribe|privacy policy|all rights reserved|manage preferences|view in browser)/i.test(line));
+  const compact = relevantLines.join("\n");
+
+  return compact.length > MAX_AI_CATEGORIZATION_CHARS ? compact.slice(0, MAX_AI_CATEGORIZATION_CHARS) : compact;
 }
 
 function buildEmailMessageKey(message: Pick<EmailInboxMessage, "messageId" | "uid" | "subject" | "date">) {

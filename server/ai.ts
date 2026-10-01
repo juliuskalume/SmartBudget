@@ -76,6 +76,7 @@ export async function categorizeSmsText(smsText: string) {
     ],
     model: GROQ_MODEL,
     response_format: { type: "json_object" },
+    max_tokens: 96,
   });
 
   const result = safeParseJson(completion.choices[0].message.content || "{}");
