@@ -32,6 +32,14 @@ type InvestmentSelection = {
   confidence: "low" | "medium" | "high";
 };
 
+type InvestmentSelectionInput = {
+  amount: number;
+  summary: Pick<FinancialSummary, "healthScore" | "savingsRate" | "cashFlow" | "netWorth">;
+  market: MarketAssetSnapshot[];
+};
+
+const INVESTMENT_SELECTION_MAX_TOKENS = 300;
+
 function normalizeCurrency(value: unknown, fallback = categorizeFallback.currency) {
   if (typeof value !== "string") {
     return fallback;
@@ -127,11 +135,7 @@ export async function generateAdviceCards(data: unknown): Promise<AdviceCard[]> 
   }
 }
 
-export async function generateInvestmentSelections(input: {
-  amount: number;
-  summary: Pick<FinancialSummary, "healthScore" | "savingsRate" | "cashFlow" | "netWorth">;
-  market: MarketAssetSnapshot[];
-}): Promise<InvestmentSelection[]> {
+export async function generateInvestmentSelections(input: InvestmentSelectionInput): Promise<InvestmentSelection[]> {
   if (!groq) {
     return [];
   }
@@ -142,15 +146,34 @@ export async function generateInvestmentSelections(input: {
         {
           role: "system",
           content:
-            "You are a portfolio suggestion engine inside a budgeting app. Choose one asset for each horizon: weeks with period 1m, months with period 3m, years with period 1y. Use ONLY the supplied market symbols. Prefer assets with strong recent momentum, but keep the user's financial stability in mind. Return ONLY JSON with a suggestions array. Each suggestion must include horizon, period, assetSymbol, rationale, confidence (low, medium, high).",
+            "You are a portfolio suggestion engine inside a budgeting app. Choose one asset for each horizon: weeks with period 1m, months with period 3m, years with period 1y. Use ONLY the supplied market symbols. Prefer strong momentum while considering financial stability. Market rows are [symbol, 1m return %, 3m return %, 6m return %, 1y return %, annualized volatility %]. Return ONLY JSON: {suggestions:[{horizon,period,assetSymbol,rationale,confidence}]}. Keep each rationale under 20 words.",
         },
         {
           role: "user",
-          content: JSON.stringify(input),
+          // Do not send display-only names, categories, and prices for the entire market
+          // screen. Groq's TPM limit applies to both prompt and completion tokens.
+          content: JSON.stringify({
+            amount: roundForAi(input.amount),
+            summary: {
+              healthScore: roundForAi(input.summary.healthScore),
+              savingsRate: roundForAi(input.summary.savingsRate),
+              cashFlow: roundForAi(input.summary.cashFlow),
+              netWorth: roundForAi(input.summary.netWorth),
+            },
+            market: input.market.map((asset) => [
+              asset.symbol,
+              roundForAi(asset.returns["1m"]),
+              roundForAi(asset.returns["3m"]),
+              roundForAi(asset.returns["6m"]),
+              roundForAi(asset.returns["1y"]),
+              roundForAi(asset.volatilityPct),
+            ]),
+          }),
         },
       ],
       model: GROQ_MODEL,
       response_format: { type: "json_object" },
+      max_tokens: INVESTMENT_SELECTION_MAX_TOKENS,
     });
 
     const result = safeParseJson(completion.choices[0].message.content || "{}");
@@ -164,6 +187,10 @@ export async function generateInvestmentSelections(input: {
   } catch {
     return [];
   }
+}
+
+function roundForAi(value: number) {
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
 }
 
 function sanitizeInvestmentSelection(value: unknown, market: MarketAssetSnapshot[]): InvestmentSelection | null {
