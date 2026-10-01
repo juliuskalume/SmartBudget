@@ -26,6 +26,7 @@ Create a `.env` file from `.env.example`:
 VITE_SUPABASE_URL="https://your-project.supabase.co"
 VITE_SUPABASE_ANON_KEY="your-supabase-anon-key"
 GROQ_API_KEY="your-groq-api-key"
+GROQ_MODEL="openai/gpt-oss-120b"
 TWELVE_DATA_API_KEY="your-twelve-data-api-key"
 SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
 APP_URL="https://your-app.vercel.app"
@@ -69,6 +70,7 @@ Use these environment variables in Vercel:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `GROQ_API_KEY`
+- `GROQ_MODEL` (optional; defaults to `openai/gpt-oss-120b`)
 - `TWELVE_DATA_API_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 

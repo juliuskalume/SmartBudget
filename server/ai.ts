@@ -3,6 +3,9 @@ import { CATEGORY_VALUES, type AdviceCard, type FinancialSummary, type Investmen
 
 const groqApiKey = process.env.GROQ_API_KEY?.trim();
 const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;
+// Keep this configurable so a Groq model retirement can be handled by an
+// environment change instead of silently dropping imported transactions.
+const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || "openai/gpt-oss-120b";
 
 const categorizeFallback = {
   isTransaction: false,
@@ -56,38 +59,34 @@ function normalizeCurrency(value: unknown, fallback = categorizeFallback.currenc
 
 export async function categorizeSmsText(smsText: string) {
   if (!groq) {
-    return categorizeFallback;
+    throw new Error("AI categorization is unavailable because GROQ_API_KEY is not configured.");
   }
 
-  try {
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            `You are a financial assistant. Decide if a bank-related SMS or email is a real financial transaction alert or receipt. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (${CATEGORY_VALUES.join(", ")}), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). Use the most specific matching category and use Other only when none of the listed categories fit clearly. If it is not a transaction alert or receipt, return isTransaction=false. Return ONLY JSON.`,
-        },
-        {
-          role: "user",
-          content: smsText,
-        },
-      ],
-      model: "llama-3.3-70b-versatile",
-      response_format: { type: "json_object" },
-    });
+  const completion = await groq.chat.completions.create({
+    messages: [
+      {
+        role: "system",
+        content:
+          `You are a financial assistant. Decide if a bank-related SMS or email is a real financial transaction alert or receipt. If it is, return isTransaction=true and extract merchant, amount, currency (prefer a 3-letter ISO 4217 code like TRY, USD, EUR, KES, NGN, UGX, GBP, INR when possible), category (${CATEGORY_VALUES.join(", ")}), and kind (expense for debit/spend/outflow, income for credit/inflow/refund). Use the most specific matching category and use Other only when none of the listed categories fit clearly. If it is not a transaction alert or receipt, return isTransaction=false. Return ONLY JSON.`,
+      },
+      {
+        role: "user",
+        content: smsText,
+      },
+    ],
+    model: GROQ_MODEL,
+    response_format: { type: "json_object" },
+  });
 
-    const result = safeParseJson(completion.choices[0].message.content || "{}");
-    return {
-      isTransaction: typeof result?.isTransaction === "boolean" ? result.isTransaction : categorizeFallback.isTransaction,
-      merchant: typeof result?.merchant === "string" ? result.merchant : categorizeFallback.merchant,
-      amount: Number.isFinite(Number(result?.amount)) ? Number(result.amount) : categorizeFallback.amount,
-      category: typeof result?.category === "string" ? result.category : categorizeFallback.category,
-      kind: result?.kind === "income" || result?.kind === "expense" ? result.kind : categorizeFallback.kind,
-      currency: normalizeCurrency(result?.currency),
-    };
-  } catch {
-    return categorizeFallback;
-  }
+  const result = safeParseJson(completion.choices[0].message.content || "{}");
+  return {
+    isTransaction: typeof result?.isTransaction === "boolean" ? result.isTransaction : categorizeFallback.isTransaction,
+    merchant: typeof result?.merchant === "string" ? result.merchant : categorizeFallback.merchant,
+    amount: Number.isFinite(Number(result?.amount)) ? Number(result.amount) : categorizeFallback.amount,
+    category: typeof result?.category === "string" ? result.category : categorizeFallback.category,
+    kind: result?.kind === "income" || result?.kind === "expense" ? result.kind : categorizeFallback.kind,
+    currency: normalizeCurrency(result?.currency),
+  };
 }
 
 export async function generateAdviceCards(data: unknown): Promise<AdviceCard[]> {
@@ -108,7 +107,7 @@ export async function generateAdviceCards(data: unknown): Promise<AdviceCard[]> 
           content: JSON.stringify(data),
         },
       ],
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       response_format: { type: "json_object" },
     });
 
@@ -149,7 +148,7 @@ export async function generateInvestmentSelections(input: {
           content: JSON.stringify(input),
         },
       ],
-      model: "llama-3.3-70b-versatile",
+      model: GROQ_MODEL,
       response_format: { type: "json_object" },
     });
 
